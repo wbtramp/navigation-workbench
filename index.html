@@ -841,7 +841,7 @@ footer{font-size:13px}
           </span>
         </div>
         <label class="f-row"><span>左上角名称字间距</span>
-          <span class="f-inline"><input type="range" id="siteNameTracking" min="-30" max="15" step="1" value="-20"><b id="siteNameTrackingVal">-0.20em</b></span>
+          <span class="f-inline"><input type="range" id="siteNameTracking" min="-30" max="15" step="1" value="-6"><b id="siteNameTrackingVal">-0.06em</b></span>
         </label>
         <label class="f-row"><span>左上角名称字体</span>
           <span class="f-inline"><input type="text" id="logoNameFamily" placeholder="如 Microsoft YaHei" maxlength="80"></span>
@@ -1165,7 +1165,7 @@ function applyLogoStyle(){
   nm.style.fontWeight=cfg.logoNameWeight||'';
   nm.style.fontFamily=cfg.logoNameFamily||'';
   nm.style.color=cfg.logoNameColor||'';
-  var trk=(cfg.siteNameTracking===undefined?-20:cfg.siteNameTracking);
+  var trk=(cfg.siteNameTracking===undefined?-6:cfg.siteNameTracking);
   nm.style.letterSpacing=(trk/100)+'em';
 }
 function setFavicon(du){
@@ -1492,7 +1492,7 @@ function openSettings(){
   if($('#logoNameWeight'))$('#logoNameWeight').value=cfg.logoNameWeight||'';
   if($('#logoNameFamily'))$('#logoNameFamily').value=cfg.logoNameFamily||'';
   if($('#logoNameColor'))$('#logoNameColor').value=cfg.logoNameColor||'#ffffff';
-  if($('#siteNameTracking')){var _trk=(cfg.siteNameTracking===undefined?-20:cfg.siteNameTracking);$('#siteNameTracking').value=_trk;$('#siteNameTrackingVal').textContent=(_trk/100).toFixed(2)+'em';}
+  if($('#siteNameTracking')){var _trk=(cfg.siteNameTracking===undefined?-6:cfg.siteNameTracking);$('#siteNameTracking').value=_trk;$('#siteNameTrackingVal').textContent=(_trk/100).toFixed(2)+'em';}
   var lp=$('#logoPreview');
   if(cfg.logo){lp.src=cfg.logo;lp.style.display='inline-block';$('#btnClearLogo').style.display='inline-block';}
   else{lp.style.display='none';$('#btnClearLogo').style.display='none';}
