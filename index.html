@@ -825,6 +825,11 @@ footer{font-size:13px}
               <option value="20">20px</option>
               <option value="22">22px</option>
               <option value="24">24px</option>
+              <option value="26">26px</option>
+              <option value="28">28px</option>
+              <option value="32">32px</option>
+              <option value="36">36px</option>
+              <option value="40">40px</option>
             </select>
             <select id="logoNameWeight">
               <option value="">默认</option>
@@ -835,6 +840,9 @@ footer{font-size:13px}
             </select>
           </span>
         </div>
+        <label class="f-row"><span>左上角名称字间距</span>
+          <span class="f-inline"><input type="range" id="siteNameTracking" min="-30" max="15" step="1" value="-20"><b id="siteNameTrackingVal">-0.20em</b></span>
+        </label>
         <label class="f-row"><span>左上角名称字体</span>
           <span class="f-inline"><input type="text" id="logoNameFamily" placeholder="如 Microsoft YaHei" maxlength="80"></span>
         </label>
@@ -1157,6 +1165,8 @@ function applyLogoStyle(){
   nm.style.fontWeight=cfg.logoNameWeight||'';
   nm.style.fontFamily=cfg.logoNameFamily||'';
   nm.style.color=cfg.logoNameColor||'';
+  var trk=(cfg.siteNameTracking===undefined?-20:cfg.siteNameTracking);
+  nm.style.letterSpacing=(trk/100)+'em';
 }
 function setFavicon(du){
   var link=$('#favicon');
@@ -1482,6 +1492,7 @@ function openSettings(){
   if($('#logoNameWeight'))$('#logoNameWeight').value=cfg.logoNameWeight||'';
   if($('#logoNameFamily'))$('#logoNameFamily').value=cfg.logoNameFamily||'';
   if($('#logoNameColor'))$('#logoNameColor').value=cfg.logoNameColor||'#ffffff';
+  if($('#siteNameTracking')){var _trk=(cfg.siteNameTracking===undefined?-20:cfg.siteNameTracking);$('#siteNameTracking').value=_trk;$('#siteNameTrackingVal').textContent=(_trk/100).toFixed(2)+'em';}
   var lp=$('#logoPreview');
   if(cfg.logo){lp.src=cfg.logo;lp.style.display='inline-block';$('#btnClearLogo').style.display='inline-block';}
   else{lp.style.display='none';$('#btnClearLogo').style.display='none';}
@@ -1868,6 +1879,7 @@ $('#logoNameSize').addEventListener('input',function(){cfg.logoNameFontSize=this
 $('#logoNameWeight').addEventListener('change',function(){cfg.logoNameWeight=this.value||undefined;saveCfg();applyLogoStyle();showToast('名称字重已保存');});
 $('#logoNameFamily').addEventListener('input',function(){cfg.logoNameFamily=this.value.trim()||undefined;saveCfg();applyLogoStyle();showToast('名称字体已保存');});
 $('#logoNameColor').addEventListener('input',function(){cfg.logoNameColor=this.value;saveCfg();applyLogoStyle();showToast('名称颜色已保存');});
+$('#siteNameTracking').addEventListener('input',function(){cfg.siteNameTracking=parseInt(this.value,10);saveCfg();applyLogoStyle();$('#siteNameTrackingVal').textContent=(this.value/100).toFixed(2)+'em';showToast('名称字间距已保存');});
 $('#btnLogoNameColorClear').addEventListener('click',function(){delete cfg.logoNameColor;saveCfg();applyLogoStyle();$('#logoNameColor').value='#ffffff';showToast('已恢复默认名称颜色');});
 $('#loginOk').addEventListener('click',tryLogin);
 $('#loginCancel').addEventListener('click',function(){$('#loginModal').style.display='none';});
