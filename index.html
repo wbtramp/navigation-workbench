@@ -203,6 +203,12 @@ footer{text-align:center;padding:6px 0 26px;font-size:12px;color:var(--muted-fg)
 .d-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
 .d-foot .save-tip{font-size:12px;color:var(--muted-fg)}
 
+/* ===== GitHub 云端同步（gh_）样式 ===== */
+.f-row input[type=password]{width:170px;flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:10px;font-size:14px;outline:none;background:var(--card);color:var(--fg)}
+.f-row input[type=password]:focus{border-color:#18181b;box-shadow:0 0 0 3px var(--ring)}
+.gh-actions{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
+.gh-status{font-size:12px;color:var(--muted-fg);background:#f8f8f8;border:1px dashed #d4d4d8;border-radius:10px;padding:7px 10px;line-height:1.5;margin-bottom:14px}
+.gh-status.ok{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}
 .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:#18181b;color:#fff;font-size:13px;padding:9px 18px;border-radius:20px;opacity:0;transition:.25s;pointer-events:none;z-index:500}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -855,6 +861,21 @@ footer{font-size:13px}
         </label>
       </div>
       <div class="d-sec">
+        <div class="d-sec-title">云端同步（GitHub）</div>
+        <div class="banner-tip">你的数据（网址 / 分类 / Banner 横幅 / LOGO / 配置）将同步至 GitHub 仓库 <b>wbtramp/navigation-workbench</b> 的 nav_data.json，实现异地打开本站点时数据一致。Token 仅保存在本机浏览器 localStorage，绝不写入站点文件。</div>
+        <label class="f-row"><span>GitHub Token</span>
+          <span class="f-inline">
+            <input type="password" id="gh_tokenInput" placeholder="ghp_..." autocomplete="off" spellcheck="false">
+            <button class="btn btn-sm" id="gh_saveToken" type="button">保存令牌</button>
+          </span>
+        </label>
+        <div class="gh-actions">
+          <button class="btn btn-sm" id="gh_push" type="button">推送云端</button>
+          <button class="btn btn-sm btn-ghost" id="gh_pull" type="button">拉取云端</button>
+        </div>
+        <div class="gh-status" id="gh_status">未配置 Token，暂未启用云端同步</div>
+      </div>
+      <div class="d-sec">
         <div class="d-sec-title">分区名称与字号（改动即时保存）</div>
         <div id="catConfigList"></div>
       </div>
@@ -872,7 +893,8 @@ footer{font-size:13px}
 var LS_CFG='nav_cfg_v1', LS_PWD='nav_pwd_v1', LS_EDIT='nav_edit_v1', LS_RECENT='nav_recent_v1';
 var LS_RMEM='nav_rmem_v1', LS_RMEM_PWD='nav_rmem_pwd_v1';   /* 记住密码：密码明文仅存本机 localStorage */
 function lstore(){try{return JSON.parse(localStorage.getItem(LS_CFG))||{};}catch(e){return {};}}
-function saveCfg(){cfg.lastSync=Date.now();try{localStorage.setItem(LS_CFG,JSON.stringify(cfg));updateSyncUI();}catch(e){showToast('保存失败：存储空间不足');}}
+function saveCfg(){cfg.lastSync=Date.now();try{localStorage.setItem(LS_CFG,JSON.stringify(cfg));updateSyncUI();}catch(e){showToast('保存失败：存储空间不足');}
+  gh_afterLocalSave();}
 function $(s){return document.querySelector(s);}
 function $$$(s){return Array.prototype.slice.call(document.querySelectorAll(s));}
 
@@ -894,6 +916,156 @@ function updateSyncUI(){
   txt.textContent='已同步 '+s;
   dot.className='sync-dot';
   if(btn)btn.title='数据已保存，最近同步时间 '+s;
+}
+
+/* ===== GitHub 云端同步（gh_ 前缀；数据实体仍为 cfg + nav_cfg_v1）===== */
+var gh_REPO='wbtramp/navigation-workbench';
+var gh_FILE='nav_data.json';
+var gh_TOKEN_KEY='nav_gh_token_v1';
+var gh_FILE_URL='https://api.github.com/repos/'+gh_REPO+'/contents/'+gh_FILE;
+var gh_AUTO_DELAY=1500;
+var gh_fileSha=null;
+var gh_pushTimer=null;
+var gh_suppressAutoPush=false;
+function gh_token(){try{return localStorage.getItem(gh_TOKEN_KEY)||'';}catch(e){return '';}}
+function gh_setToken(t){try{localStorage.setItem(gh_TOKEN_KEY,(t||'').trim());}catch(e){}}
+function gh_hasToken(){return !!gh_token();}
+function gh_b64Encode(str){try{return btoa(unescape(encodeURIComponent(str)));}catch(e){return '';}}
+function gh_b64Decode(b64){try{return decodeURIComponent(escape(atob(String(b64).replace(/\s/g,''))));}catch(e){try{return atob(String(b64).replace(/\s/g,''));}catch(e2){return '';}}}
+function gh_statusTxt(msg,ok){
+  var s=$('#gh_status');if(!s)return;
+  if(msg===undefined)msg=gh_hasToken()?'已配置 Token，编辑数据后约 1.5 秒自动推送':'未配置 Token，暂未启用云端同步';
+  s.textContent=msg;s.className=ok?'gh-status ok':'gh-status';
+}
+function gh_getRemote(cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET',gh_FILE_URL,true);
+  xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
+  xhr.timeout=15000;
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4)return;
+    if(xhr.status===404){cb({ok:false,status:404});return;}
+    if(xhr.status===200){
+      try{
+        var j=JSON.parse(xhr.responseText);
+        var data=JSON.parse(gh_b64Decode(j.content||''));
+        gh_fileSha=j.sha;
+        cb({ok:true,status:200,data:data,sha:j.sha});
+      }catch(e){cb({ok:false,status:200,parseError:true});}
+      return;
+    }
+    cb({ok:false,status:xhr.status});
+  };
+  xhr.onerror=function(){cb({ok:false,status:0});};
+  xhr.send();
+}
+function gh_getMetaOnly(cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET',gh_FILE_URL,true);
+  xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
+  xhr.timeout=15000;
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4)return;
+    if(xhr.status===404){cb(null);return;}
+    if(xhr.status===200){
+      try{var j=JSON.parse(xhr.responseText);gh_fileSha=j.sha;cb(j.sha);}catch(e){cb(null);}
+      return;
+    }
+    cb(null);
+  };
+  xhr.onerror=function(){cb(null);};
+  xhr.send();
+}
+function gh_sendPut(body,cmt,cb){
+  var xhr=new XMLHttpRequest();
+  xhr.open('PUT',gh_FILE_URL,true);
+  xhr.setRequestHeader('Authorization','Bearer '+gh_token());
+  xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
+  xhr.setRequestHeader('Content-Type','application/json');
+  xhr.timeout=30000;
+  xhr.onreadystatechange=function(){
+    if(xhr.readyState!==4)return;
+    if(xhr.status===200||xhr.status===201){
+      try{var j=JSON.parse(xhr.responseText);if(j&&j.content&&j.content.sha)gh_fileSha=j.content.sha;}catch(e){}
+      cb({ok:true,status:xhr.status});
+      return;
+    }
+    cb({ok:false,status:xhr.status});
+  };
+  xhr.onerror=function(){cb({ok:false,status:0});};
+  xhr.send(JSON.stringify(body));
+}
+function gh_push(cmt,done){
+  if(!gh_hasToken()){if(done)done({ok:false,status:0,error:'no-token'});return;}
+  var content=gh_b64Encode(JSON.stringify({version:1,savedAt:new Date().toISOString(),cfg:cfg}));
+  var fire=function(sha){
+    var body={message:cmt||'sync nav data',content:content};
+    if(sha)body.sha=sha;
+    gh_sendPut(body,cmt,function(r){
+      if(!r.ok&&r.status===409){
+        gh_getMetaOnly(function(m){
+          var body2={message:cmt||'sync nav data',content:content};if(m)body2.sha=m;
+          gh_sendPut(body2,cmt,function(r2){if(done)done(r2);});
+        });
+        return;
+      }
+      if(done)done(r);
+    });
+  };
+  if(gh_fileSha){fire(gh_fileSha);return;}
+  gh_getMetaOnly(function(m){fire(m||undefined);});
+}
+function gh_afterLocalSave(){
+  if(gh_suppressAutoPush){gh_suppressAutoPush=false;return;}
+  if(!gh_hasToken())return;
+  clearTimeout(gh_pushTimer);
+  gh_pushTimer=setTimeout(function(){
+    gh_push('auto sync',function(r){
+      if(r.ok){gh_statusTxt('已自动推送云端 '+new Date().toLocaleTimeString('zh-CN',{hour12:false}),true);}
+      else{gh_statusTxt('自动推送失败（HTTP '+(r.status||'网络错误')+'），改动已保存在本地',null);}
+    });
+  },gh_AUTO_DELAY);
+}
+function gh_renderAll(){
+  applyBrand();applySide();applyCats();buildSidebar();updateEditUI();
+  applyBanner();applyLogoStyle();injectCatAdd();renderCustomLinks();renderRecent();updateCatCounts();updateSyncUI();
+  ensureCardKeys();injectEditButtons();applyCardOverrides();applyAllOrders();initDragSort();
+  applyCatOrderToPage();hideHiddenSections();applyFontConfig();buildNavList();
+}
+function gh_pull(){
+  gh_getRemote(function(r){
+    if(!r.ok){
+      if(r.status===404){
+        var hasLocal=cfg&&(Object.keys(cfg).length>0);
+        if(gh_hasToken()&&hasLocal){
+          gh_statusTxt('云端暂无数据，正在自动推送本地数据',null);
+          gh_push('init push local',function(pr){gh_statusTxt(pr.ok?'已推送本地数据到云端':'自动推送失败（HTTP '+(pr.status||'网络错误')+'）',pr.ok);});
+        }else{
+          gh_statusTxt('云端暂无 nav_data.json（本地也无数据，稍后编辑将自动推送）',null);
+        }
+        return;
+      }
+      gh_statusTxt('拉取云端失败（HTTP '+(r.status||'网络错误')+'），使用本地数据',null);
+      return;
+    }
+    var remote=r.data;
+    if(remote&&remote.cfg&&typeof remote.cfg==='object'){
+      gh_suppressAutoPush=true;
+      cfg=remote.cfg;
+      cfg.lastSync=Date.now();
+      saveCfg();
+      gh_renderAll();
+      gh_statusTxt('已从云端拉取数据并应用',true);
+      showToast('已从云端同步数据');
+    }else{
+      gh_statusTxt('云端 nav_data.json 格式无效，保持本地数据',null);
+    }
+  });
+}
+function gh_initSync(){
+  if(!gh_hasToken()){gh_statusTxt('未配置 Token，暂未启用云端同步',null);return;}
+  gh_statusTxt('正在从云端同步数据…',null);
+  gh_pull();
 }
 
 /* ===== 顶部时钟：公历 + 星期 + 时分秒 + 农历（走秒，需求1）===== */
@@ -1315,6 +1487,7 @@ function openSettings(){
   else{lp.style.display='none';$('#btnClearLogo').style.display='none';}
   $('#setSideFont').value=cfg.sideFontSize||13;
   $('#sideFontVal').textContent=(cfg.sideFontSize||13)+'px';
+  var ghti=$('#gh_tokenInput');if(ghti)ghti.value=gh_token();
   buildCatConfigList();
   buildNavList();
   $('#settingsDrawer').style.display='flex';
@@ -1780,6 +1953,27 @@ document.addEventListener('click',function(e){
   recordVisit(nm?nm.textContent:'',c.href,ico?(ico.src||''):'');
 },true);
 
+/* ===== 云端同步事件绑定 ===== */
+(function(){
+  var ti=$('#gh_tokenInput');if(ti)ti.value=gh_token();
+  var b1=$('#gh_saveToken');if(b1)b1.addEventListener('click',function(){
+    var v=($('#gh_tokenInput').value||'').trim();
+    gh_setToken(v);
+    gh_statusTxt(v?'令牌已保存（仅存本机浏览器，不会上传）':undefined,!!v);
+    showToast(v?'GitHub Token 已保存':'已清除 GitHub Token');
+  });
+  var b2=$('#gh_push');if(b2)b2.addEventListener('click',function(){
+    if(!gh_hasToken()){gh_statusTxt('请先配置 GitHub Token',null);showToast('请先保存 GitHub Token');return;}
+    gh_statusTxt('正在推送云端…',null);
+    gh_push('manual push',function(r){gh_statusTxt(r.ok?'已推送云端成功':('推送失败（HTTP '+(r.status||'网络错误')+'）'),r.ok);showToast(r.ok?'已推送云端':'推送云端失败');});
+  });
+  var b3=$('#gh_pull');if(b3)b3.addEventListener('click',function(){
+    if(!gh_hasToken()){gh_statusTxt('请先配置 GitHub Token',null);showToast('请先保存 GitHub Token');return;}
+    gh_statusTxt('正在拉取云端…',null);
+    gh_pull();
+  });
+})();
+
 /* ===== 初始化 ===== */
 (function(){
   $$$('section.cat').forEach(function(sec){
@@ -1788,12 +1982,10 @@ document.addEventListener('click',function(e){
   });
   cfg=lstore();
   if(cfg.links&&cfg.links['cat-收藏'])delete cfg.links['cat-收藏'];
-  applyBrand();applySide();applyCats();buildSidebar();updateEditUI();
-  applyBanner();applyLogoStyle();injectCatAdd();renderCustomLinks();renderRecent();updateCatCounts();updateSyncUI();
-  ensureCardKeys();injectEditButtons();applyCardOverrides();applyAllOrders();initDragSort();
-  applyCatOrderToPage();hideHiddenSections();applyFontConfig();buildNavList();
+  gh_renderAll();
   tickClock();setInterval(tickClock,1000);
   window.addEventListener('scroll',spy,{passive:true});
+  gh_initSync();
 })();
 </script>
 </body>
