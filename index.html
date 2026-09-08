@@ -859,7 +859,7 @@ footer{font-size:13px}
             <button class="btn btn-sm btn-ghost" id="btnClearBanner" style="display:none">清除</button>
           </span>
         </div>
-        <div class="banner-tip">Banner 必须为 <b>2K 高清图</b>：宽度需 ≥2560px（推荐 2560×533，宽高比约 4.8:1）；上传时会校验分辨率，非 2K 会被拦截。上传后自动缩放铺满顶部通栏。</div>
+        <div class="banner-tip">Banner 不再叠加遮罩，浅色 / 白底图保持原色。推荐做图尺寸：<b>4096×720px</b>（高清通栏，比例约 5.7:1）；上传需为 2K 以上（宽 ≥2560px），宽度不足会被拦截。</div>
         <label class="f-row"><span>顶部通栏背景色</span>
           <span class="f-inline"><input type="color" id="setBannerColor" value="#417FF9">
           <button class="btn btn-sm btn-ghost" id="btnBannerColorClear">恢复默认渐变</button></span>
@@ -1209,8 +1209,8 @@ function applyBanner(){
   b.style.background='';b.style.backgroundImage='';b.style.backgroundColor='';
   var img=bannerImage(),c=cfg.bannerColor;
   if(img){
-    if(c){b.style.backgroundColor=c;b.style.backgroundImage='linear-gradient(rgba(0,30,110,.22),rgba(0,30,110,.22)),url("'+img+'")';}
-    else b.style.backgroundImage='linear-gradient(rgba(0,30,110,.18),rgba(0,30,110,.18)),url("'+img+'")';
+    if(c)b.style.backgroundColor=c;
+    b.style.backgroundImage='url("'+img+'")';
     b.style.backgroundSize='cover';b.style.backgroundPosition='center';
   }else if(c){
     b.style.backgroundImage='linear-gradient(120deg,'+shade(c,-16)+' 0%,'+c+' 45%,'+shade(c,12)+' 100%)';
