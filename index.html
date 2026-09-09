@@ -79,6 +79,25 @@ input,select{font-family:inherit}
 .side-item.drag{opacity:.5}
 .side-top{display:block;text-align:center;padding:9px;font-size:12px;color:var(--muted-fg);border-top:1px solid var(--border-soft)}
 .side-top:hover{color:var(--primary);background:var(--subtle-bg)}
+/* ===== 快捷导航上方：微云笔记入口按钮 ===== */
+.side-note{display:flex;align-items:center;gap:10px;margin:10px;padding:11px 14px;font-size:var(--side-font-size);color:var(--fg);background:linear-gradient(135deg,#f8fafc,#eef2ff);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:.15s;user-select:none;line-height:1.5}
+.side-note:hover{border-color:#2563eb;box-shadow:0 1px 4px rgba(37,99,235,.15)}
+.side-note .side-note-ico{width:22px;height:22px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-size:12px;font-weight:700}
+.side-note:active{transform:scale(.98)}
+/* ===== 微云笔记二级页面 ===== */
+.note-page{position:fixed;inset:0;z-index:1000;background:var(--bg);display:none;flex-direction:column}
+.note-page.show{display:flex}
+.note-top{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 22px;height:60px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.note-top .note-title{display:flex;align-items:center;gap:11px;font-size:17px;font-weight:700;color:var(--fg);user-select:none}
+.note-top .note-title .logo-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-size:14px;font-weight:700}
+.note-actions{display:flex;align-items:center;gap:10px}
+.note-btn{height:34px;padding:0 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--fg);font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.note-btn:hover{border-color:var(--primary);color:var(--primary)}
+.note-btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.note-btn.primary:hover{background:var(--primary-hover);color:#fff}
+.note-frame-wrap{flex:1;min-height:0;padding:16px 18px 18px}
+.note-frame-wrap iframe{width:100%;height:100%;border:1px solid var(--border);border-radius:var(--radius);background:#fff;box-shadow:0 1px 2px rgba(24,24,27,.04)}
+.note-strip{padding:8px 18px 0;font-size:12px;color:var(--muted-fg);display:flex;align-items:center;gap:6px}
 .main{flex:1;min-width:0}
 
 /* ===== 分类块 ===== */
@@ -350,6 +369,9 @@ footer{font-size:13px}
   <div class="layout">
     <aside class="sidebar">
       <nav class="side">
+        <div class="side-note" onclick="openNotePage()">
+          <span class="side-note-ico">N</span><span>微云笔记</span>
+        </div>
         <div class="side-cap">快捷导航</div>
         <div id="sideItems"></div>
         <a class="side-top" href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false">↑ 回到顶部</a>
@@ -896,6 +918,22 @@ footer{font-size:13px}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ===== 微云笔记二级页面 ===== -->
+<div class="note-page" id="notePage">
+  <div class="note-strip">当前页面内嵌腾讯微云网页版，可在此直接使用微云笔记；如登录或功能受限，请点击右上角「新窗口打开」。</div>
+  <div class="note-top">
+    <div class="note-title">
+      <span class="logo-ico">N</span>
+      <span>微云笔记</span>
+    </div>
+    <div class="note-actions">
+      <a class="note-btn" id="noteNewWin" href="https://www.weiyun.com/" target="_blank" rel="noopener">新窗口打开</a>
+      <button class="note-btn primary" type="button" onclick="closeNotePage()">返回导航</button>
+    </div>
+  </div>
+  <div class="note-frame-wrap" id="noteFrameWrap"></div>
+</div>
 
 <script>
 var LS_CFG='nav_cfg_v1', LS_PWD='nav_pwd_v1', LS_EDIT='nav_edit_v1', LS_RECENT='nav_recent_v1';
@@ -2041,6 +2079,32 @@ document.addEventListener('click',function(e){
   window.addEventListener('scroll',spy,{passive:true});
   gh_initSync();
 })();
+
+/* ===== 微云笔记二级页面 ===== */
+var noteFrameLoaded=false;
+function openNotePage(){
+  document.body.style.overflow='hidden';
+  var pg=$('#notePage');
+  if(!pg){return;}
+  pg.classList.add('show');
+  if(!noteFrameLoaded){
+    noteFrameLoaded=true;
+    var f=document.createElement('iframe');
+    f.src='https://www.weiyun.com/';
+    f.setAttribute('loading','eager');
+    f.setAttribute('allowfullscreen','true');
+    $('#noteFrameWrap').appendChild(f);
+  }
+}
+function closeNotePage(){
+  var pg=$('#notePage');
+  if(pg)pg.classList.remove('show');
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape')closeNotePage();
+});
+
 </script>
 </body>
 </html>
