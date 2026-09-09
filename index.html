@@ -792,6 +792,7 @@ footer{font-size:13px}
       <div class="d-sec">
         <div class="d-sec-title">分区导航（拖拽排序 · 右键删除）</div>
         <div class="sec-nav" id="secNavList"></div>
+        <button class="btn btn-sm btn-ghost" id="btnAddCat" type="button" style="margin-top:10px">＋ 新增分区</button>
       </div>
       <div class="d-sec">
         <div class="d-sec-title">页面字体</div>
@@ -1501,8 +1502,80 @@ function initNavDrag(wrap){
       showToast('分类导航顺序已保存');}
   });
 }
+/* ===== 新增分区（自定义动态分区，保存于 cfg.customSecs，刷新后自动重建）===== */
+function newCatId(){  /* 生成不冲突的分区 id */
+  var base='cat-新分区';
+  if(!document.getElementById(base)){
+    var dup=false;
+    for(var k in (cfg.catNames||{})){if(k===base){dup=true;break;}}
+    if(!dup)return base;
+  }
+  var n=2;
+  while(document.getElementById(base+n))n++;
+  return base+n;
+}
+function addNewCatSection(){
+  var name=(prompt('请输入新分区名称：','新分区')||'').trim();
+  if(!name){showToast('分区名称不能为空');return;}
+  var id=newCatId();
+  var dot='#417FF9';  /* 默认主题蓝 */
+  var sec=document.createElement('section');
+  sec.className='cat';sec.id=id;
+  sec.innerHTML='<div class="cat-head"><h3 class="cat-title"><span class="cat-dot" style="background:'+dot+'"></span></h3></div><div class="card-grid"></div>';
+  sec.querySelector('.cat-title').appendChild(document.createTextNode(name));
+  var main=document.getElementById('main');
+  var todo=document.getElementById('cat-工作待办');
+  if(!main){showToast('页面未就绪');return;}
+  if(todo&&todo.parentNode===main){main.insertBefore(sec,todo);}
+  else{main.appendChild(sec);}
+  cfg.customSecs=cfg.customSecs||[];
+  cfg.customSecs.push({id:id,name:name,dot:dot});
+  cfg.catNames=cfg.catNames||{};cfg.catNames[id]=name;
+  var cc=catCfg();cc[id]=cc[id]||{};cc[id].iconColor=dot;  /* 存颜色，避免 applyCats 清空 dot */
+  cfg.catOrder=cfg.catOrder||[];cfg.catOrder.push(id);
+  defaultCats[id]={dot:dot};
+  saveCfg();
+  applyCats();buildSidebar();buildNavList();injectCatAdd();buildCatConfigList();applyCatOrderToPage();hideHiddenSections();updateEditUI();
+  showToast('已新增分区：'+name);
+}
+/* 刷新时据 cfg.customSecs 重建动态分区；保留建区时用户自定义的 dot 色 */
+function rebuildCustomSections(){
+  var secs=cfg.customSecs||[];
+  if(!secs.length)return;
+  secs.forEach(function(cs){
+    if(!cs||!cs.id)return;
+    if(document.getElementById(cs.id))return;
+    var dot=cs.dot||'#417FF9';
+    var sec=document.createElement('section');
+    sec.className='cat';sec.id=cs.id;
+    sec.innerHTML='<div class="cat-head"><h3 class="cat-title"><span class="cat-dot" style="background:'+dot+'"></span></h3></div><div class="card-grid"></div>';
+    sec.querySelector('.cat-title').appendChild(document.createTextNode(cs.name||cs.id));
+    var main=document.getElementById('main');
+    var todo=document.getElementById('cat-工作待办');
+    if(!main)return;
+    if(todo&&todo.parentNode===main){main.insertBefore(sec,todo);}
+    else{main.appendChild(sec);}
+    defaultCats[cs.id]={dot:dot};
+  });
+}
 function onDeleteCataSection(id){
   if(!confirm('确定删除分区「'+catTitle(id)+'」？该分区内全部网址将不再显示。'))return;
+  var isCustom=false;
+  if(cfg.customSecs&&cfg.customSecs.length){
+    var before=cfg.customSecs.length;
+    cfg.customSecs=cfg.customSecs.filter(function(c){return c.id!==id;});
+    isCustom=cfg.customSecs.length!==before;
+  }
+  if(isCustom){
+    /* 动态分区：物理移除 DOM 与持久化记录，不走 hiddenSections（否则重建后会被误隐藏） */
+    var el=document.getElementById(id);
+    if(el&&el.parentNode)el.parentNode.removeChild(el);
+    if(cfg.catNames)delete cfg.catNames[id];
+    if(cfg.catOrder){var ci=cfg.catOrder.indexOf(id);if(ci>=0)cfg.catOrder.splice(ci,1);}
+    saveCfg();
+    buildSidebar();buildNavList();buildCatConfigList();
+    showToast('已删除分区');return;
+  }
   cfg.hiddenSections=cfg.hiddenSections||[];
   if(cfg.hiddenSections.indexOf(id)<0)cfg.hiddenSections.push(id);
   if(cfg.catOrder){var i=cfg.catOrder.indexOf(id);if(i>=0)cfg.catOrder.splice(i,1);}
@@ -1547,7 +1620,8 @@ function openSettings(){
   $('#settingsDrawer').style.display='flex';
 }
 function buildCatConfigList(){
-  var list=$('#catConfigList');list.innerHTML='';
+  var list=$('#catConfigList');if(!list)return;
+  list.innerHTML='';
   orderedCatSecs().forEach(function(sec){
     var id=sec.id;if(id==='cat-最近使用')return;
     var name=catTitle(id),c=catCfg()[id]||{};
@@ -1907,6 +1981,7 @@ function injectCatAdd(){
 
 /* ===== 绑定事件 ===== */
 $('#btnManage').addEventListener('click',openLogin);
+$('#btnAddCat').addEventListener('click',addNewCatSection);
 $('#btnSettingsBar').addEventListener('click',openSettings);
 $('#btnSync').addEventListener('click',function(){
   if(cfg.lastSync)showToast('数据已保存，最近同步时间：'+new Date(cfg.lastSync).toLocaleString('zh-CN'));
@@ -2038,11 +2113,12 @@ document.addEventListener('click',function(e){
 
 /* ===== 初始化 ===== */
 (function(){
+  cfg=lstore();
+  rebuildCustomSections();  /* 先重建用户新增的动态分区，再收集 defaultCats / 渲染 */
   $$$('section.cat').forEach(function(sec){
     var d=sec.querySelector('.cat-dot');
     defaultCats[sec.id]={dot:d?d.style.background:'#93c5fd'};
   });
-  cfg=lstore();
   if(cfg.links&&cfg.links['cat-收藏'])delete cfg.links['cat-收藏'];
   gh_renderAll();
   tickClock();setInterval(tickClock,1000);
