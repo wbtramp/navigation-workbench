@@ -1025,7 +1025,7 @@ function gh_push(cmt,done){
 }
 function gh_afterLocalSave(){
   if(gh_suppressAutoPush){gh_suppressAutoPush=false;return;}
-  if(!gh_hasToken())return;
+  if(!gh_hasToken()){gh_statusTxt('未配置 Token，改动仅保存在本机，未同步云端（请在设置面板配置 Token 开启同步）',null);return;}
   clearTimeout(gh_pushTimer);
   gh_pushTimer=setTimeout(function(){
     gh_push('auto sync',function(r){
@@ -1039,6 +1039,40 @@ function gh_renderAll(){
   applyBanner();applyLogoStyle();injectCatAdd();renderCustomLinks();renderRecent();updateCatCounts();updateSyncUI();
   ensureCardKeys();injectEditButtons();applyCardOverrides();applyAllOrders();initDragSort();
   applyCatOrderToPage();hideHiddenSections();applyFontConfig();buildNavList();
+}
+function gh_deepMerge(localCfg,remoteCfg){
+  /* 合并云端与本地配置：links/cats 按 url/分类 id 取并集去重，其余字段以本地为准（本地缺时补云端值），避免云端空/旧数据覆盖本地更全数据 */
+  var merged={},key;
+  for(key in (localCfg||{})){if(Object.prototype.hasOwnProperty.call(localCfg,key))merged[key]=localCfg[key];}
+  for(key in (remoteCfg||{})){
+    if(!Object.prototype.hasOwnProperty.call(remoteCfg,key))continue;
+    if(key==='links'||key==='cats')continue;
+    if(merged[key]===undefined||merged[key]===null||merged[key]==='')merged[key]=remoteCfg[key];
+  }
+  var ll=(localCfg&&localCfg.links)||{},rl=(remoteCfg&&remoteCfg.links)||{};
+  var lc=(localCfg&&localCfg.cats)||{},rc=(remoteCfg&&remoteCfg.cats)||{};
+  var mlinks={},seen={},catsKeys={};
+  function feed(cat,item){
+    if(!item||typeof item!=='object')return;
+    var u=item.url||'',nm=item.name||'';
+    if(!u&&!nm)return;
+    var key2=cat+'|'+(u||nm);
+    if(!mlinks[cat])mlinks[cat]=[];
+    if(seen[key2])return;
+    seen[key2]=1;
+    mlinks[cat].push(item);
+  }
+  function feedAll(map){
+    var c;
+    for(c in map){if(!Object.prototype.hasOwnProperty.call(map,c))continue;catsKeys[c]=1;var arr=map[c];if(!Array.isArray(arr))continue;for(var i=0;i<arr.length;i++)feed(c,arr[i]);}
+  }
+  feedAll(ll);feedAll(rl);
+  merged.links=mlinks;
+  var mc={},cn;
+  for(cn in lc){if(Object.prototype.hasOwnProperty.call(lc,cn))mc[cn]=lc[cn];}
+  for(cn in rc){if(Object.prototype.hasOwnProperty.call(rc,cn)&&mc[cn]===undefined)mc[cn]=rc[cn];}
+  merged.cats=mc;
+  return merged;
 }
 function gh_pull(){
   gh_getRemote(function(r){
@@ -1059,11 +1093,12 @@ function gh_pull(){
     var remote=r.data;
     if(remote&&remote.cfg&&typeof remote.cfg==='object'){
       gh_suppressAutoPush=true;
-      cfg=remote.cfg;
+      var mergedCfg=gh_deepMerge(cfg,remote.cfg);
+      cfg=mergedCfg;
       cfg.lastSync=Date.now();
       saveCfg();
       gh_renderAll();
-      gh_statusTxt('已从云端拉取数据并应用',true);
+      gh_statusTxt('已从云端拉取数据并合并本地收藏',true);
       showToast('已从云端同步数据');
     }else{
       gh_statusTxt('云端 nav_data.json 格式无效，保持本地数据',null);
