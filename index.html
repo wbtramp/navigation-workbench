@@ -1304,7 +1304,7 @@ function initSideDrag(){
   });
   wrap.addEventListener('drop',function(e){e.preventDefault();});
   wrap.addEventListener('dragend',function(){
-    if(dragEl){dragEl.classList.remove('drag');dragEl=null;saveSideOrder();refreshSpyData();showToast('快捷导航顺序已保存');}
+    if(dragEl){dragEl.classList.remove('drag');dragEl=null;saveSideOrder();refreshSpyData();buildNavList();showToast('快捷导航顺序已保存');}
   });
 }
 
@@ -1313,15 +1313,7 @@ function initSideDrag(){
 function buildSidebar(){
   var wrap=$('#sideItems');wrap.innerHTML='';
   wrap.removeAttribute('data-drag');
-  var list=orderedCatSecs().map(function(sec){return {id:sec.id,name:catTitle(sec.id)};});
-  if(cfg.sideOrder&&cfg.sideOrder.length){
-    var order=cfg.sideOrder.slice();
-    list.sort(function(a,b){
-      var ia=order.indexOf(a.id),ib=order.indexOf(b.id);
-      if(ia<0)ia=1e9;if(ib<0)ib=1e9;
-      return ia-ib;
-    });
-  }
+  var list=orderedCatSecsFinal().map(function(sec){return {id:sec.id,name:catTitle(sec.id)};});
   list.forEach(function(o){
     var a=document.createElement('a');
     a.className='side-item';a.href='#'+o.id;a.setAttribute('data-name',o.name);a.setAttribute('data-cat',o.id);a.draggable=true;
@@ -1454,16 +1446,31 @@ function orderedCatSecs(){
   }
   return secs;
 }
+/* 分区排序统一口径：sideOrder（快捷导航拖拽结果）优先，未设置时回退 catOrder。
+   快捷导航（buildSidebar）与分区导航（buildNavList）共用此顺序，保证两处显示一致 */
+function orderedCatSecsFinal(){
+  var secs=orderedCatSecs().slice();
+  if(cfg.sideOrder&&cfg.sideOrder.length&&secs.length>1){
+    var order=cfg.sideOrder.slice();
+    secs.sort(function(a,b){
+      var ia=order.indexOf(a.id),ib=order.indexOf(b.id);
+      if(ia<0)ia=1e9;if(ib<0)ib=1e9;
+      return ia-ib;
+    });
+  }
+  return secs;
+}
 function saveCatOrder(){
   var items=$$$('#secNavList .cat-nav-item');
   if(!items||!items.length)return;
   cfg.catOrder=items.map(function(a){return a.getAttribute('data-cat');});
+  cfg.sideOrder=cfg.catOrder.slice();  /* 与快捷导航保持同一顺序源 */
   saveCfg();
 }
 function buildNavList(){
   var list=$('#secNavList');if(!list)return;
   list.innerHTML='';
-  orderedCatSecs().forEach(function(sec){
+  orderedCatSecsFinal().forEach(function(sec){
     var a=document.createElement('a');
     a.className='cat-nav-item';a.href='#'+sec.id;a.draggable=true;a.setAttribute('data-cat',sec.id);
     a.title='拖拽调整顺序；右键删除该分区';
@@ -1541,6 +1548,7 @@ function addNewCatSection(){
   cfg.catNames=cfg.catNames||{};cfg.catNames[id]=name;
   var cc=catCfg();cc[id]=cc[id]||{};cc[id].iconColor=dot;  /* 存颜色，避免 applyCats 清空 dot */
   cfg.catOrder=cfg.catOrder||[];cfg.catOrder.push(id);
+  cfg.sideOrder=cfg.sideOrder||[];cfg.sideOrder.push(id);  /* 同步维护，保证两端顺序一致 */
   defaultCats[id]={dot:dot};
   saveCfg();
   applyCats();buildSidebar();buildNavList();injectCatAdd();buildCatConfigList();applyCatOrderToPage();hideHiddenSections();updateEditUI();
@@ -1581,6 +1589,7 @@ function onDeleteCataSection(id){
     if(el&&el.parentNode)el.parentNode.removeChild(el);
     if(cfg.catNames)delete cfg.catNames[id];
     if(cfg.catOrder){var ci=cfg.catOrder.indexOf(id);if(ci>=0)cfg.catOrder.splice(ci,1);}
+    if(cfg.sideOrder){var si=cfg.sideOrder.indexOf(id);if(si>=0)cfg.sideOrder.splice(si,1);}
     saveCfg();
     buildSidebar();buildNavList();buildCatConfigList();
     showToast('已删除分区');return;
@@ -1588,6 +1597,7 @@ function onDeleteCataSection(id){
   cfg.hiddenSections=cfg.hiddenSections||[];
   if(cfg.hiddenSections.indexOf(id)<0)cfg.hiddenSections.push(id);
   if(cfg.catOrder){var i=cfg.catOrder.indexOf(id);if(i>=0)cfg.catOrder.splice(i,1);}
+  if(cfg.sideOrder){var si=cfg.sideOrder.indexOf(id);if(si>=0)cfg.sideOrder.splice(si,1);}
   saveCfg();
   hideHiddenSections();buildSidebar();buildNavList();
   showToast('已删除分区：'+catTitle(id));
@@ -1599,7 +1609,7 @@ function hideHiddenSections(){
 function applyCatOrderToPage(){
   var main=$('#main');if(!main)return;
   var todo=document.getElementById('cat-工作待办');
-  var navs=orderedCatSecs();
+  var navs=orderedCatSecsFinal();
   var frag=document.createDocumentFragment();
   navs.forEach(function(s){frag.appendChild(s);});
   if(todo&&todo.parentNode===main){main.insertBefore(frag,todo);}
@@ -1631,7 +1641,7 @@ function openSettings(){
 function buildCatConfigList(){
   var list=$('#catConfigList');if(!list)return;
   list.innerHTML='';
-  orderedCatSecs().forEach(function(sec){
+  orderedCatSecsFinal().forEach(function(sec){
     var id=sec.id;if(id==='cat-最近使用')return;
     var name=catTitle(id),c=catCfg()[id]||{};
     var row=document.createElement('div');row.className='cat-row';
