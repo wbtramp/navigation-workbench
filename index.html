@@ -1289,7 +1289,7 @@ function initSideDrag(){
   wrap.addEventListener('dragstart',function(e){
     var it=e.target.closest?e.target.closest('.side-item'):null;
     if(!it||it.parentNode!==wrap)return;
-    dragEl=it;it.classList.add('drag');
+    dragEl=it;it.classList.add('drag');window._sideDragging=true;
     try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','');}catch(err){}
   });
   wrap.addEventListener('dragover',function(e){
@@ -1304,6 +1304,7 @@ function initSideDrag(){
   });
   wrap.addEventListener('drop',function(e){e.preventDefault();});
   wrap.addEventListener('dragend',function(){
+    window._sideDragging=false;
     if(dragEl){dragEl.classList.remove('drag');dragEl=null;saveSideOrder();refreshSpyData();buildNavList();showToast('快捷导航顺序已保存');}
   });
 }
@@ -1336,16 +1337,50 @@ function attachSideLed(){
   };
   syncLedToActive();
 }
-function moveLedTo(it){
-  var led=$('#sideLed');if(!led||!it)return;
+function moveLedTo(it,align){
+  if(!it)return;
+  var led=$('#sideLed');if(!led)return;
   led.style.top=it.offsetTop+'px';led.style.height=it.offsetHeight+'px';led.style.opacity=1;
+  /* 同步选中态：鼠标跟随项即为选中项，灰色选择框与蓝条不再错位 */
+  $$$('.side-item.active').forEach(function(x){if(x!==it)x.classList.remove('active');});
+  it.classList.add('active');
   /* 黑白反色跟随：移除上一项反色，给当前跟随项反色（黑底方块 + 白字白点） */
   $$$('.side-item.led-on').forEach(function(x){if(x!==it)x.classList.remove('led-on');});
   it.classList.add('led-on');
+  /* 水平对齐：滚动页面使对应分区标题与该侧栏项处于同一水平线（仅鼠标跟随触发，恢复高亮不入） */
+  if(align!==false)alignSectionToSide(it);
+}
+/* 对齐节流：hover 连续扫动时只执行最后一次，避免滚动动画互相叠加 */
+var _alignTimer=null,_alignCid='',_alignSec=null,_alignIt=null;
+function alignSectionToSide(it){
+  if(window._sideDragging)return;  /* 拖拽排序时不触发页面滚动 */
+  var cid=it.getAttribute('data-cat');if(!cid)return;
+  var sec=document.getElementById(cid);if(!sec)return;
+  var target=sec.querySelector('.cat-title')||sec;
+  var diff=target.getBoundingClientRect().top-it.getBoundingClientRect().top;
+  if(Math.abs(diff)<6)return;
+  _alignCid=cid;_alignSec=target;_alignIt=it;
+  if(_alignTimer)clearTimeout(_alignTimer);
+  _alignTimer=setTimeout(function(){
+    _alignTimer=null;
+    var secNow=_alignSec,_itNow=_alignIt;
+    if(!secNow||!_itNow)return;
+    /* 瞬时精确对齐：目标滚动量 = 分区标题与侧栏项的视口差。侧栏为 sticky+全局 smooth，
+       增量 scrollBy 会与平滑动画/sticky 位移竞争导致错位回弹；用绝对定位瞬时跳最稳也最快 */
+    var cur=window.scrollY;
+    var goal=cur+(secNow.getBoundingClientRect().top-_itNow.getBoundingClientRect().top);
+    if(Math.abs(goal-cur)>=4){
+      var de=document.documentElement;
+      var prev=de.style.scrollBehavior;
+      de.style.scrollBehavior='auto';   /* 临时关闭全局 smooth，保证瞬时直达不回弹 */
+      de.scrollTop=goal;
+      de.style.scrollBehavior=prev;
+    }
+  },80);
 }
 function syncLedToActive(){
   var ac=$$$('.side-item.active')[0];
-  if(ac)moveLedTo(ac);
+  if(ac)moveLedTo(ac,false);
 }
 function refreshSideDots(){
   $$$('.side-item').forEach(function(it){
@@ -1376,8 +1411,11 @@ function refreshSpyData(){sideItems=$$$('.side-item');cats=$$$('section.cat').fi
 function spy(){
   var y=window.scrollY+120,cur=sideItems[0]?sideItems[0].getAttribute('data-name'):'';
   for(var i=0;i<cats.length;i++){if(y>=cats[i].top)cur=cats[i].id.replace('cat-','');}
-  sideItems.forEach(function(it){it.classList.toggle('active',it.getAttribute('data-name')===cur);});
-  if(!sideHovering)syncLedToActive();
+  /* 鼠标悬停侧栏时，选中态跟随鼠标（由 moveLedTo 维护），不再被滚动高亮覆盖 */
+  if(!sideHovering){
+    sideItems.forEach(function(it){it.classList.toggle('active',it.getAttribute('data-name')===cur);});
+    syncLedToActive();
+  }
 }
 var sideHovering=false;
 
