@@ -185,6 +185,10 @@ footer{text-align:center;padding:6px 0 26px;font-size:12px;color:var(--muted-fg)
 .sec-nav a{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:var(--subtle-bg);border:1px solid var(--border-soft);color:#3f3f46;font-size:12.5px;font-weight:500;text-decoration:none;transition:background .15s,color .15s}
 .sec-nav a:hover{background:var(--primary);border-color:var(--primary);color:#fff}
 .d-sec{margin-bottom:22px}
+.cat-add-row{display:flex;gap:8px;margin-top:10px}
+.cat-add-row input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--border-soft);border-radius:6px;background:var(--subtle-bg);color:var(--fg);font-size:12.5px;outline:none}
+.cat-add-row input:focus{border-color:var(--primary)}
+.cat-add-row .btn{white-space:nowrap}
 .d-sec-title{font-size:11px;letter-spacing:.3px;color:var(--muted-fg);margin-bottom:9px;font-weight:600;text-transform:uppercase}
 .f-row{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:13px;color:#3f3f46}
 .f-row>span:first-child{flex:0 0 118px;color:#52525b;line-height:1.4}
@@ -792,7 +796,10 @@ footer{font-size:13px}
       <div class="d-sec">
         <div class="d-sec-title">分区导航（拖拽排序 · 右键删除）</div>
         <div class="sec-nav" id="secNavList"></div>
-        <button class="btn btn-sm btn-ghost" id="btnAddCat" type="button" style="margin-top:10px">＋ 新增分区</button>
+        <div class="cat-add-row">
+          <input type="text" id="newCatName" placeholder="输入新分区名称" maxlength="24">
+          <button class="btn btn-sm" id="btnAddCat" type="button">＋ 新增</button>
+        </div>
       </div>
       <div class="d-sec">
         <div class="d-sec-title">页面字体</div>
@@ -1515,8 +1522,9 @@ function newCatId(){  /* 生成不冲突的分区 id */
   return base+n;
 }
 function addNewCatSection(){
-  var name=(prompt('请输入新分区名称：','新分区')||'').trim();
-  if(!name){showToast('分区名称不能为空');return;}
+  var inp=document.getElementById('newCatName');
+  var name=(inp?inp.value:'').trim();
+  if(!name){showToast('请输入分区名称');if(inp)inp.focus();return;}
   var id=newCatId();
   var dot='#417FF9';  /* 默认主题蓝 */
   var sec=document.createElement('section');
@@ -1537,6 +1545,7 @@ function addNewCatSection(){
   saveCfg();
   applyCats();buildSidebar();buildNavList();injectCatAdd();buildCatConfigList();applyCatOrderToPage();hideHiddenSections();updateEditUI();
   showToast('已新增分区：'+name);
+  if(inp){inp.value='';inp.focus();}  /* 清空并保持聚焦，便于连续新增 */
 }
 /* 刷新时据 cfg.customSecs 重建动态分区；保留建区时用户自定义的 dot 色 */
 function rebuildCustomSections(){
@@ -1982,6 +1991,7 @@ function injectCatAdd(){
 /* ===== 绑定事件 ===== */
 $('#btnManage').addEventListener('click',openLogin);
 $('#btnAddCat').addEventListener('click',addNewCatSection);
+$('#newCatName').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();addNewCatSection();}});
 $('#btnSettingsBar').addEventListener('click',openSettings);
 $('#btnSync').addEventListener('click',function(){
   if(cfg.lastSync)showToast('数据已保存，最近同步时间：'+new Date(cfg.lastSync).toLocaleString('zh-CN'));
