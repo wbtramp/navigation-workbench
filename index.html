@@ -928,7 +928,7 @@ footer{font-size:13px}
       <span>微云笔记</span>
     </div>
     <div class="note-actions">
-      <a class="note-btn" id="noteNewWin" href="https://www.weiyun.com/" target="_blank" rel="noopener">新窗口打开</a>
+      <a class="note-btn" id="noteNewWin" href="https://www.weiyun.com/disk/note" target="_blank" rel="noopener">新窗口打开</a>
       <button class="note-btn primary" type="button" onclick="closeNotePage()">返回导航</button>
     </div>
   </div>
@@ -2090,7 +2090,7 @@ function openNotePage(){
   if(!noteFrameLoaded){
     noteFrameLoaded=true;
     var f=document.createElement('iframe');
-    f.src='https://www.weiyun.com/';
+    f.src='https://www.weiyun.com/disk/note';
     f.setAttribute('loading','eager');
     f.setAttribute('allowfullscreen','true');
     $('#noteFrameWrap').appendChild(f);
