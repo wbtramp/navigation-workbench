@@ -794,6 +794,21 @@ footer{font-size:13px}
     <div class="d-head"><b>工作台管理</b><button class="d-close" id="dClose">✕</button></div>
     <div class="d-body">
       <div class="d-sec">
+        <div class="d-sec-title">云端同步（GitHub）</div>
+        <div class="banner-tip">你的数据（网址 / 分类 / Banner 横幅 / LOGO / 配置）将同步至 GitHub 仓库 <b>wbtramp/navigation-workbench</b> 的 nav_data.json，实现异地打开本站点时数据一致。Token 仅保存在本机浏览器 localStorage，绝不写入站点文件。</div>
+        <label class="f-row"><span>GitHub Token</span>
+          <span class="f-inline">
+            <input type="password" id="gh_tokenInput" placeholder="ghp_..." autocomplete="off" spellcheck="false">
+            <button class="btn btn-sm" id="gh_saveToken" type="button">保存令牌</button>
+          </span>
+        </label>
+        <div class="gh-actions">
+          <button class="btn btn-sm" id="gh_push" type="button">推送云端</button>
+          <button class="btn btn-sm btn-ghost" id="gh_pull" type="button">拉取云端</button>
+        </div>
+        <div class="gh-status" id="gh_status">未配置 Token，暂未启用云端同步</div>
+      </div>
+      <div class="d-sec">
         <div class="d-sec-title">分区导航（拖拽排序 · 右键删除）</div>
         <div class="sec-nav" id="secNavList"></div>
         <div class="cat-add-row">
@@ -883,21 +898,6 @@ footer{font-size:13px}
         <label class="f-row"><span>快捷栏文字大小</span>
           <span class="f-inline"><input type="range" id="setSideFont" min="11" max="20" step="1" value="13"><b id="sideFontVal">13px</b></span>
         </label>
-      </div>
-      <div class="d-sec">
-        <div class="d-sec-title">云端同步（GitHub）</div>
-        <div class="banner-tip">你的数据（网址 / 分类 / Banner 横幅 / LOGO / 配置）将同步至 GitHub 仓库 <b>wbtramp/navigation-workbench</b> 的 nav_data.json，实现异地打开本站点时数据一致。Token 仅保存在本机浏览器 localStorage，绝不写入站点文件。</div>
-        <label class="f-row"><span>GitHub Token</span>
-          <span class="f-inline">
-            <input type="password" id="gh_tokenInput" placeholder="ghp_..." autocomplete="off" spellcheck="false">
-            <button class="btn btn-sm" id="gh_saveToken" type="button">保存令牌</button>
-          </span>
-        </label>
-        <div class="gh-actions">
-          <button class="btn btn-sm" id="gh_push" type="button">推送云端</button>
-          <button class="btn btn-sm btn-ghost" id="gh_pull" type="button">拉取云端</button>
-        </div>
-        <div class="gh-status" id="gh_status">未配置 Token，暂未启用云端同步</div>
       </div>
       <div class="d-sec">
         <div class="d-sec-title">分区名称与字号（改动即时保存）</div>
@@ -1335,6 +1335,15 @@ function attachSideLed(){
     var it=e.target&&e.target.closest?e.target.closest('.side-item'):null;
     if(it)moveLedTo(it);
   };
+  /* 点击侧栏项：仅有点击动作才触发水平对齐（悬停只跟随蓝条/灰框，不滚动页面） */
+  wrap.onclick=function(e){
+    var it=e.target&&e.target.closest?e.target.closest('.side-item'):null;
+    if(!it||it.parentNode!==wrap)return;
+    if(window._sideDragging){e.preventDefault();return;}
+    e.preventDefault();           /* 阻止默认锚点跳转，改由对齐滚动精确定位 */
+    moveLedTo(it);
+    alignSectionToSide(it);
+  };
   syncLedToActive();
 }
 function moveLedTo(it,align){
@@ -1347,36 +1356,24 @@ function moveLedTo(it,align){
   /* 黑白反色跟随：移除上一项反色，给当前跟随项反色（黑底方块 + 白字白点） */
   $$$('.side-item.led-on').forEach(function(x){if(x!==it)x.classList.remove('led-on');});
   it.classList.add('led-on');
-  /* 水平对齐：滚动页面使对应分区标题与该侧栏项处于同一水平线（仅鼠标跟随触发，恢复高亮不入） */
-  if(align!==false)alignSectionToSide(it);
+  /* 说明：水平对齐不再随悬停触发，改为侧栏项【点击】时即时对齐，见 attachSideLed 的 onclick */
 }
-/* 对齐节流：hover 连续扫动时只执行最后一次，避免滚动动画互相叠加 */
-var _alignTimer=null,_alignCid='',_alignSec=null,_alignIt=null;
+/* 点击侧栏项即时对齐：滚动页面使对应分区标题与该侧栏项处于同一水平线（仅点击触发） */
 function alignSectionToSide(it){
   if(window._sideDragging)return;  /* 拖拽排序时不触发页面滚动 */
   var cid=it.getAttribute('data-cat');if(!cid)return;
   var sec=document.getElementById(cid);if(!sec)return;
   var target=sec.querySelector('.cat-title')||sec;
-  var diff=target.getBoundingClientRect().top-it.getBoundingClientRect().top;
-  if(Math.abs(diff)<6)return;
-  _alignCid=cid;_alignSec=target;_alignIt=it;
-  if(_alignTimer)clearTimeout(_alignTimer);
-  _alignTimer=setTimeout(function(){
-    _alignTimer=null;
-    var secNow=_alignSec,_itNow=_alignIt;
-    if(!secNow||!_itNow)return;
-    /* 瞬时精确对齐：目标滚动量 = 分区标题与侧栏项的视口差。侧栏为 sticky+全局 smooth，
-       增量 scrollBy 会与平滑动画/sticky 位移竞争导致错位回弹；用绝对定位瞬时跳最稳也最快 */
-    var cur=window.scrollY;
-    var goal=cur+(secNow.getBoundingClientRect().top-_itNow.getBoundingClientRect().top);
-    if(Math.abs(goal-cur)>=4){
-      var de=document.documentElement;
-      var prev=de.style.scrollBehavior;
-      de.style.scrollBehavior='auto';   /* 临时关闭全局 smooth，保证瞬时直达不回弹 */
-      de.scrollTop=goal;
-      de.style.scrollBehavior=prev;
-    }
-  },80);
+  var cur=window.scrollY;
+  var goal=cur+(target.getBoundingClientRect().top-it.getBoundingClientRect().top);
+  if(Math.abs(goal-cur)<4)return;
+  /* 瞬时精确对齐：侧栏为 sticky+全局 smooth，增量 scrollBy 会与平滑动画/sticky 位移竞争
+     导致错位回弹；用绝对定位瞬时跳最稳也最快 */
+  var de=document.documentElement;
+  var prev=de.style.scrollBehavior;
+  de.style.scrollBehavior='auto';   /* 临时关闭全局 smooth，保证瞬时直达不回弹 */
+  de.scrollTop=goal;
+  de.style.scrollBehavior=prev;
 }
 function syncLedToActive(){
   var ac=$$$('.side-item.active')[0];
