@@ -237,7 +237,7 @@ footer{text-align:center;padding:6px 0 26px;font-size:12px;color:var(--muted-fg)
 .logo-ico{width:38px;height:38px;border-radius:12px}
 
 /* 3 快捷导航跟随块：黑块改浅灰（贴合文字、保留圆角跟随动效） */
-.side-led{background:#d0d0d5;border-radius:8px;box-shadow:0 2px 6px rgba(24,24,27,.10)}
+.side-led{background:#ececef;border-radius:8px;box-shadow:0 2px 6px rgba(24,24,27,.10)}
 .side-item.led-on,.side-item.led-on:hover{color:#18181b}
 .side-item.led-on .side-dot,.side-item.led-on:hover .side-dot{background:#18181b}
 
@@ -1357,19 +1357,9 @@ function attachSideLed(){
 function moveLedTo(it,align){
   if(!it)return;
   var wrap=it.parentNode,led=$('#sideLed');if(!wrap||!led)return;
-  /* 贴合文字：灰块宽高与位置按该项的圆点+文字内容计算，不再整行铺满，面积更收敛 */
-  var wr=wrap.getBoundingClientRect();
-  var dot=it.querySelector('.side-dot'),txt=it.querySelector('.side-txt');
-  var top=it.offsetTop,left=it.offsetLeft,w=it.offsetWidth,h=it.offsetHeight;
-  if(txt){
-    var tr=txt.getBoundingClientRect();
-    top += (it.getBoundingClientRect().top-tr.top);
-    h   = tr.height;                          /* 文字行高 */
-    var lw=tr.width;                          /* 文字本身宽度 */
-    if(dot){ var dr=dot.getBoundingClientRect(); lw += (tr.left-dr.right)+dr.width; } /* 圆点+间隙 一起计入 */
-    left = it.offsetLeft + (it.offsetWidth-lw)/2;  /* 相对内容居中 */
-    w    = lw;
-  }
+  /* 整条跟随：灰块与条目同高，宽度左右各留白 gap 不贴边界，大小恒定，仅随条目上下浮动 */
+  var gap=6;
+  var top=it.offsetTop,left=it.offsetLeft+gap,w=it.offsetWidth-gap*2,h=it.offsetHeight;
   led.style.left=left+'px';led.style.width=w+'px';
   led.style.top=top+'px';led.style.height=h+'px';led.style.opacity=1;
   /* 同步选中态：鼠标跟随项即为选中项，灰色选择框与蓝条不再错位 */
