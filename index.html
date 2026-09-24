@@ -23,6 +23,38 @@
   --sidew:220px; --side-font-size:14px; --gp:3.5%;
   --radius:8px;
 }
+
+/* ===== 黑色主题（仅观感配色，不动数据与布局） ===== */
+.theme-row{display:flex;gap:10px}
+.theme-btn{flex:1;padding:8px 0;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--fg);font-size:13px;transition:.15s}
+.theme-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:500}
+body.dark{
+  --primary:#3a3a41; --primary-hover:#47474f;
+  --bg:#141416; --card:#1d1d21;
+  --border:#2c2c31; --border-soft:#2c2c31;
+  --fg:#f0f0f2; --muted-fg:#9b9ba4;
+  --subtle-bg:#26262b;
+  --ring:rgba(255,255,255,.14);
+}
+body.dark::before{background:transparent}
+body.dark .side-item{color:#d4d4d8}
+body.dark .side-dot{background:rgba(255,255,255,.22)}
+body.dark .side-led{background:rgba(255,255,255,.16);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+body.dark .side-item.led-on,body.dark .side-item.led-on:hover{color:#fff}
+body.dark .side-item.led-on .side-dot,body.dark .side-item.led-on:hover .side-dot{background:#fff}
+body.dark .r-name,body.dark .todo-item,body.dark .btn-ghost,body.dark .lm-upload,body.dark .sec-nav a,body.dark .f-row{color:#d4d4d8}
+body.dark .recent-item:hover{background:#26262b;border-color:#3a3a41}
+body.dark .topnav-clock .tc-time{color:#f0f0f2}
+body.dark .topnav-clock .tc-lunar{background:#26262b;border-color:#3a3a41;color:#9b9ba4}
+body.dark .banner-tip,body.dark .gh-status{background:#1a1a1e;border-color:#3a3a41}
+body.dark .cat{ border-top-color:#2c2c31}
+body.dark .cat-title{color:#f0f0f2}
+body.dark .card:hover{border-color:#3a3a41;box-shadow:0 2px 4px rgba(0,0,0,.5),0 18px 36px -10px rgba(0,0,0,.6)}
+body.dark .tbtn:hover,body.dark .recent-more:hover,body.dark .lm-upload:hover{background:#26262b;border-color:#3a3a41}
+body.dark .modal input:focus,body.dark .f-row input:focus,body.dark .f-row select:focus{border-color:#f0f0f2;box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+body.dark .toast{background:#f0f0f2;color:#18181b}
+body.dark .lm-rmem{color:#9b9ba4}
+body.dark .lm-rmem input{accent-color:#f0f0f2}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased}
@@ -840,6 +872,14 @@ footer{font-size:13px}
         <div class="banner-tip">选中后整页文字切换为对应字体（<b>LOGO 名称</b>除外），字体经 CDN 加载，失败自动回退系统字体；配合全局字号已放大两档。</div>
       </div>
       <div class="d-sec">
+        <div class="d-sec-title">页面配色</div>
+        <div class="theme-row">
+          <button class="theme-btn" id="themeLight" type="button">白色页面</button>
+          <button class="theme-btn" id="themeDark" type="button">黑色页面</button>
+        </div>
+        <div class="banner-tip">切换仅改变页面观感配色，<b>不改变任何数据与布局</b>；选择保存在本机浏览器，换设备需重新选择。</div>
+      </div>
+      <div class="d-sec">
         <div class="d-sec-title">基础设置</div>
         <label class="f-row"><span>网站名称</span><input type="text" id="setSiteName" maxlength="24"></label>
         <div class="f-row"><span>LOGO 图片</span>
@@ -923,6 +963,7 @@ footer{font-size:13px}
 
 <script>
 var LS_CFG='nav_cfg_v1', LS_PWD='nav_pwd_v1', LS_EDIT='nav_edit_v1', LS_RECENT='nav_recent_v1';
+var LS_THEME='nav_theme_v1';   /* 页面黑白主题（仅本机 localStorage，不同步云端） */
 var LS_RMEM='nav_rmem_v1', LS_RMEM_PWD='nav_rmem_pwd_v1';   /* 记住密码：密码明文仅存本机 localStorage */
 function lstore(){try{return JSON.parse(localStorage.getItem(LS_CFG))||{};}catch(e){return {};}}
 function saveCfg(){cfg.lastSync=Date.now();try{localStorage.setItem(LS_CFG,JSON.stringify(cfg));updateSyncUI();}catch(e){showToast('保存失败：存储空间不足');}
@@ -1283,6 +1324,13 @@ function applyBanner(){
 
 /* ===== 快捷栏文字大小 ===== */
 function applySide(){var s=cfg.sideFontSize||15;document.documentElement.style.setProperty('--side-font-size',s+'px');}
+function applyTheme(t){
+  document.body.classList.toggle('dark',t==='dark');
+  try{localStorage.setItem(LS_THEME,t);}catch(e){}
+  var l=$('#themeLight'),d=$('#themeDark');
+  if(l)l.classList.toggle('active',t!=='dark');
+  if(d)d.classList.toggle('active',t==='dark');
+}
 /* ===== 快捷导航侧栏拖拽排序（顺序持久化到 cfg.sideOrder）===== */
 function saveSideOrder(){
   var items=$$$('#sideItems .side-item');
@@ -2191,6 +2239,11 @@ document.addEventListener('click',function(e){
   tickClock();setInterval(tickClock,1000);
   window.addEventListener('scroll',spy,{passive:true});
   gh_initSync();
+
+  /* ===== 页面黑白主题（仅观感，不动数据） ===== */
+  applyTheme(localStorage.getItem(LS_THEME)==='dark'?'dark':'light');
+  $('#themeLight').addEventListener('click',function(){applyTheme('light');showToast('已切换为白色页面');});
+  $('#themeDark').addEventListener('click',function(){applyTheme('dark');showToast('已切换为黑色页面');});
 })();
 
 </script>
