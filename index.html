@@ -94,6 +94,8 @@ input,select{font-family:inherit}
   box-shadow:0 12px 28px rgba(15,23,42,.16)}
 .bing-wall{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.4s ease;z-index:0;pointer-events:none}
 .bing-wall.on{opacity:1}
+.banner::after{content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(100deg,rgba(12,14,20,.58) 0%,rgba(12,14,20,.22) 40%,rgba(12,14,20,.42) 100%)}
+body.dark .banner::after{background:linear-gradient(100deg,rgba(6,7,10,.68) 0%,rgba(6,7,10,.3) 40%,rgba(6,7,10,.5) 100%)}
 
 /* ===== 布局：左(固定) + 右内容；sidebar 拉伸等高使 sticky 冻结生效 ===== */
 .layout{display:flex;align-items:stretch;gap:24px;padding:20px 0 44px}
@@ -1321,6 +1323,8 @@ function bingWallNext(){
   var cur=bingWallLayers[i%2],other=bingWallLayers[(i+1)%2];
   if(other)other.classList.remove('on');
   cur.style.backgroundImage='url("'+bingWallList[i]+'")';
+  cur.style.backgroundSize='cover';
+  cur.style.backgroundPosition='center';
   cur.classList.add('on');
   bingWallIdx++;
 }
@@ -1334,7 +1338,7 @@ function bingWallStart(customFirst){
   if(customFirst)bingWallList.push(customFirst);
   var idxs=[0,1,2,3,4,5,6,7],done=0;
   idxs.forEach(function(idx){
-    fetch('https://bing.biturl.top/?resolution=1920&format=json&index='+idx+'&mkt=zh-CN',{mode:'cors'})
+    fetch('https://bing.biturl.top/?resolution=UHD&format=json&index='+idx+'&mkt=zh-CN',{mode:'cors'})
       .then(function(r){return r.json();})
       .then(function(j){if(j&&j.url)bingWallList.push(j.url);})
       .catch(function(){})
