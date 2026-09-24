@@ -1324,13 +1324,14 @@ function bingWallNext(){
   cur.classList.add('on');
   bingWallIdx++;
 }
-function bingWallStart(){
+function bingWallStart(customFirst){
   var b=document.querySelector('.banner');if(!b)return;
   bingWallClear();
   var a=document.createElement('div');a.className='bing-wall';
   var c=document.createElement('div');c.className='bing-wall';
   b.appendChild(a);b.appendChild(c);
   bingWallLayers=[a,c];
+  if(customFirst)bingWallList.push(customFirst);
   var idxs=[0,1,2,3,4,5,6,7],done=0;
   idxs.forEach(function(idx){
     fetch('https://bing.biturl.top/?resolution=1920&format=json&index='+idx+'&mkt=zh-CN',{mode:'cors'})
@@ -1348,8 +1349,7 @@ function applyBanner(){
   var img=bannerImage(),c=cfg.bannerColor;
   if(img){
     if(c)b.style.backgroundColor=c;
-    b.style.backgroundImage='url("'+img+'")';
-    b.style.backgroundSize='cover';b.style.backgroundPosition='center';
+    bingWallStart(img);
   }else if(c){
     b.style.backgroundImage='linear-gradient(120deg,'+shade(c,-16)+' 0%,'+c+' 45%,'+shade(c,12)+' 100%)';
   }else{
