@@ -375,6 +375,31 @@ footer{font-size:13px}
 /* 弹窗图标：自适应预览区 */
 .lm-ico-adapt{display:flex;align-items:center;gap:6px}
 
+
+/* ===== 标签右键归类菜单（玻璃拟态 · 跟随明暗主题） ===== */
+.cat-ctx-menu{position:fixed;z-index:9999;min-width:186px;max-width:260px;padding:6px;
+  background:var(--ctx-bg);border:1px solid var(--ctx-border);border-radius:14px;
+  -webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);
+  box-shadow:0 1px 0 var(--ctx-hi) inset,0 12px 34px -8px var(--ctx-shadow),0 2px 8px rgba(0,0,0,.1);
+  opacity:0;transform:translateY(5px) scale(.97);transform-origin:top left;pointer-events:none;
+  transition:opacity .14s ease,transform .18s cubic-bezier(.2,1.3,.5,1)}
+.cat-ctx-menu.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+:root{--ctx-bg:rgba(252,253,255,.9);--ctx-border:rgba(255,255,255,.95);--ctx-hi:rgba(255,255,255,1);--ctx-shadow:rgba(70,95,150,.3);--ctx-item:#27272a;--ctx-hover:rgba(59,130,246,.12);--ctx-cur:#2563eb;--ctx-sep:#e8eaef}
+body.dark{--ctx-bg:rgba(30,32,40,.86);--ctx-border:rgba(255,255,255,.14);--ctx-hi:rgba(255,255,255,.1);--ctx-shadow:rgba(0,0,0,.6);--ctx-item:#e8eaf0;--ctx-hover:rgba(120,160,255,.18);--ctx-cur:#8ab4ff;--ctx-sep:rgba(255,255,255,.1)}
+.ctxm-title{padding:7px 10px 8px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted-fg);display:flex;justify-content:space-between;align-items:center}
+.ctxm-title b{font-size:10px;font-weight:500;color:var(--ctx-cur);opacity:.85;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxm-list{max-height:300px;overflow-y:auto;padding:2px 0}
+.ctxm-list::-webkit-scrollbar{width:6px}
+.ctxm-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.ctxm-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ctx-item);font-size:13px;text-align:left;cursor:pointer;outline:none;transition:background .12s}
+.ctxm-item:hover,.ctxm-item:focus{background:var(--ctx-hover)}
+.ctxm-item .dot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.4) inset}
+.ctxm-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxm-item .cur-tag{font-size:10px;color:var(--ctx-cur);font-weight:600}
+.ctxm-item.is-cur{color:var(--ctx-cur);font-weight:600}
+.ctxm-sep{height:1px;background:var(--ctx-sep);margin:5px 6px}
+.ctxm-new{color:var(--ctx-cur);font-weight:600}
+.ctxm-new .plus{font-size:15px;line-height:1}
 </style>
 </head>
 <body>
@@ -2388,6 +2413,122 @@ document.addEventListener('click',function(e){
   $('#themeDark').addEventListener('click',function(){applyTheme('dark');showToast('已切换为黑色页面');});
 })();
 
+
+/* ===== 标签右键归类：把链接在分区之间移动（支持静态预置卡 + 自定义卡） ===== */
+var catCtxState={key:'',cat:'',name:''};
+function ctxMenuEl(){return document.getElementById('catCtxMenu');}
+function closeCatCtx(){var m=ctxMenuEl();if(m)m.classList.remove('open');}
+function openCatCtx(x,y,key,cat,name){
+  var m=ctxMenuEl(),list=document.getElementById('ctxmList');
+  if(!m||!list)return;
+  catCtxState={key:key,cat:cat,name:name||'该标签'};
+  var nameEl=document.getElementById('ctxmItemName');if(nameEl)nameEl.textContent=catCtxState.name;
+  list.innerHTML='';
+  var secs=orderedCatSecsFinal();
+  secs.forEach(function(sec){
+    var b=document.createElement('button');
+    b.type='button';b.className='ctxm-item'+(sec.id===cat?' is-cur':'');
+    var dot=document.createElement('span');dot.className='dot';
+    var cfg2=(cfg.catColors||{});var c=catCfg();
+    var col=(c[sec.id]&&c[sec.id].iconColor)||'#94a3b8';
+    dot.style.background=col;
+    var nm=document.createElement('span');nm.className='nm';nm.textContent=catTitle(sec.id);
+    b.appendChild(dot);b.appendChild(nm);
+    if(sec.id===cat){var tg=document.createElement('span');tg.className='cur-tag';tg.textContent='当前';b.appendChild(tg);}
+    b.addEventListener('click',function(){closeCatCtx();moveCardToCat(catCtxState.key,catCtxState.cat,sec.id);});
+    list.appendChild(b);
+  });
+  m.style.left='0px';m.style.top='0px';
+  m.classList.add('open');
+  var r=m.getBoundingClientRect();
+  var left=Math.min(x,window.innerWidth-r.width-10),top=Math.min(y,window.innerHeight-r.height-10);
+  m.style.left=Math.max(8,left)+'px';m.style.top=Math.max(8,top)+'px';
+}
+/* 读取任意卡片的数据（自定义链接 / linkOverrides / 纯静态卡） */
+function cardDataOf(key,cat){
+  var found=findCustomLink(cat,key);
+  if(found)return {name:found.name,url:found.url,icon:found.icon||'',note:found.note||'',kind:'custom'};
+  var ov=cfg.linkOverrides&&cfg.linkOverrides[key];
+  if(ov&&!ov.del)return {name:ov.name||'',url:ov.url||'',icon:ov.icon||'',note:ov.note||'',kind:'override'};
+  var card=document.querySelector('.card[data-key="'+CSS.escape(key)+'"]');
+  if(card){
+    var nm=card.querySelector('strong'),im=card.querySelector('.item-ico'),dc=card.querySelector('.card-desc');
+    return {name:nm?nm.textContent.trim():(card.textContent||'').trim(),url:card.href||'',icon:(im&&im.src&&im.tagName==='IMG')?im.src:'',note:(dc&&dc.textContent&&dc.textContent!=='点击访问')?dc.textContent:'',kind:'static'};
+  }
+  return null;
+}
+/* 从源分区移除该链接：自定义/override 直接改数组，静态卡用 linkOverrides.del 隐藏 */
+function removeFromCat(key,cat,kind){
+  if(kind==='custom'){
+    var arr=cfg.links&&cfg.links[cat];
+    if(arr)for(var i=0;i<arr.length;i++)if(arr[i].key===key){arr.splice(i,1);break;}
+  }else{
+    cfg.linkOverrides=cfg.linkOverrides||{};
+    cfg.linkOverrides[key]=Object.assign({},cfg.linkOverrides[key]||{},{cat:cat,del:true});
+  }
+  if(cfg.order&&cfg.order[cat]){var oi=cfg.order[cat].indexOf(key);if(oi>=0)cfg.order[cat].splice(oi,1);}
+}
+/* 核心：移动卡片到目标分区 */
+function moveCardToCat(key,srcCat,toCat){
+  if(!key||!toCat)return;
+  if(srcCat===toCat){showToast('已经在该分区了');return;}
+  var data=cardDataOf(key,srcCat);
+  if(!data){showToast('未找到该标签数据');return;}
+  removeFromCat(key,srcCat,data.kind);
+  /* 目标分区新增一条（统一存为自定义链接，图标保持 assets/ 引用） */
+  linksOf(toCat).push({name:data.name||hostOf(data.url),url:data.url,note:data.note||'自定义收藏',key:(data.kind==='custom'?key:newKey()),icon:data.icon||''});
+  saveCfg();
+  gh_renderAll();
+  showToast('已归类到「'+catTitle(toCat)+'」');
+}
+/* 右键事件委托：任意网址卡片 */
+document.addEventListener('contextmenu',function(e){
+  var t=e.target.closest?e.target.closest('a.card'):null;
+  if(!t)return;
+  e.preventDefault();e.stopPropagation();
+  var key=cardKey(t);
+  var sec=t.closest?t.closest('section.cat'):null;
+  var cat=sec?sec.id:'';
+  var nm=t.querySelector('strong');
+  var name=nm?nm.textContent:(t.textContent||'').trim();
+  openCatCtx(e.clientX,e.clientY,key,cat,name);
+});
+/* 点空白处 / Esc / 滚动时关闭菜单 */
+document.addEventListener('click',function(e){var m=ctxMenuEl();if(m&&!m.contains(e.target))closeCatCtx();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCatCtx();});
+window.addEventListener('scroll',closeCatCtx,true);
+window.addEventListener('resize',closeCatCtx);
+/* 新建分区并移入 */
+var ctxmNewBtn=document.getElementById('ctxmNew');
+if(ctxmNewBtn)ctxmNewBtn.addEventListener('click',function(){
+  var name=prompt('新分区名称：','新分区');
+  if(!name||!name.trim())return;
+  name=name.trim();
+  var key=catCtxState.key,srcCat=catCtxState.cat;
+  var id=newCatId();
+  var dot='#417FF9';
+  var sec=document.createElement('section');sec.className='cat';sec.id=id;
+  sec.innerHTML='<div class="cat-head"><h3 class="cat-title"><span class="cat-dot" style="background:'+dot+'"></span></h3></div><div class="card-grid"></div>';
+  sec.querySelector('.cat-title').appendChild(document.createTextNode(name));
+  var main=document.getElementById('main'),todo=document.getElementById('cat-工作待办');
+  if(main){if(todo&&todo.parentNode===main)main.insertBefore(sec,todo);else main.appendChild(sec);}
+  cfg.customSecs=cfg.customSecs||[];cfg.customSecs.push({id:id,name:name,dot:dot});
+  cfg.catNames=cfg.catNames||{};cfg.catNames[id]=name;
+  var cc=catCfg();cc[id]=cc[id]||{};cc[id].iconColor=dot;
+  cfg.catOrder=cfg.catOrder||[];cfg.catOrder.push(id);
+  cfg.sideOrder=cfg.sideOrder||[];cfg.sideOrder.push(id);
+  defaultCats[id]={dot:dot};
+  moveCardToCat(key,srcCat,id);
+  showToast('已新建「'+name+'」并移入标签');
+});
 </script>
+
+<!-- 标签右键归类菜单 -->
+<div class="cat-ctx-menu" id="catCtxMenu" role="menu" aria-label="归类菜单">
+  <div class="ctxm-title"><span>归类到分区</span><b id="ctxmItemName"></b></div>
+  <div class="ctxm-list" id="ctxmList"></div>
+  <div class="ctxm-sep"></div>
+  <button class="ctxm-item ctxm-new" id="ctxmNew" type="button"><span class="plus">＋</span><span class="nm">新建分区并移入…</span></button>
+</div>
 </body>
 </html>
