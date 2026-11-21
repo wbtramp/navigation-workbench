@@ -120,6 +120,11 @@ body.dark{--led-bg:linear-gradient(135deg,rgba(255,255,255,.20) 0%,rgba(170,195,
 .side-item.active{color:var(--fg);font-weight:600;border-left-color:var(--blue)}
 .side-item.active .side-dot{background:var(--blue)}
 .side-item.led-on,.side-item.led-on:hover{color:#fff}
+.side-item .side-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-item .side-rename{flex:none;width:15px;height:15px;margin-left:auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--muted-fg);opacity:.32;cursor:pointer;transition:opacity .12s,color .12s,background .12s;user-select:none}
+.side-item:hover .side-rename,.side-item.led-on .side-rename{opacity:1}
+.side-item .side-rename:hover{color:#fff;background:var(--blue);opacity:1}
+.side-item .side-rename-input{flex:1;min-width:0;height:24px;padding:2px 6px;border:1px solid var(--blue);border-radius:6px;background:var(--card);color:var(--fg);font-size:inherit;outline:none;box-shadow:0 0 0 3px rgba(59,130,246,.14)}
 .side-item.led-on .side-dot,.side-item.led-on:hover .side-dot{background:#fff}
 .side-item.drag{opacity:.5}
 .side-top{display:block;text-align:center;padding:9px;font-size:12px;color:var(--muted-fg);border-top:1px solid var(--border-soft)}
@@ -1504,6 +1509,7 @@ function initSideDrag(){
   wrap.setAttribute('data-drag','1');
   var dragEl=null;
   wrap.addEventListener('dragstart',function(e){
+    if(e.target&&e.target.closest&&e.target.closest('.side-rename,.side-rename-input')){e.preventDefault();return;}
     var it=e.target.closest?e.target.closest('.side-item'):null;
     if(!it||it.parentNode!==wrap)return;
     dragEl=it;it.classList.add('drag');window._sideDragging=true;
@@ -1535,13 +1541,44 @@ function buildSidebar(){
   list.forEach(function(o){
     var a=document.createElement('a');
     a.className='side-item';a.href='#'+o.id;a.setAttribute('data-name',o.name);a.setAttribute('data-cat',o.id);a.draggable=true;
-    a.innerHTML='<span class="side-dot"></span><span class="side-txt">'+o.name+'</span>';
+    a.innerHTML='<span class="side-dot"></span><span class="side-txt">'+o.name+'</span><span class="side-rename" title="重命名分区" aria-label="重命名分区">✎</span>';
     wrap.appendChild(a);
   });
   var led=document.createElement('div');led.id='sideLed';led.className='side-led';wrap.insertBefore(led,wrap.firstChild);
   attachSideLed();
   refreshSpyData();
   initSideDrag();
+}
+/* 侧栏分区直接重命名：小铅笔 → 行内输入框（Enter 保存 / Esc 取消） */
+function startSideRename(a,id){
+  if(!isEdit){showToast('请先通过「管理」登录后再修改分区名称');return;}
+  var txt=a.querySelector('.side-txt');if(!txt||a.querySelector('.side-rename-input'))return;
+  var old=txt.textContent.trim();
+  var inp=document.createElement('input');
+  inp.type='text';inp.className='side-rename-input';inp.maxLength=24;inp.value=old;
+  txt.style.display='none';
+  var pencil=a.querySelector('.side-rename');
+  if(pencil)a.insertBefore(inp,pencil);else a.appendChild(inp);
+  inp.focus();inp.select();
+  var done=false;
+  function finish(save){
+    if(done)return;done=true;
+    var nm=inp.value.trim();
+    if(save&&nm&&nm!==old){
+      cfg.catNames=cfg.catNames||{};cfg.catNames[id]=nm;saveCfg();
+      setCatTitleText(id,nm);buildSidebar();buildNavList();
+      showToast('分区已重命名为：'+nm);
+    }else{
+      inp.remove();txt.style.display='';
+    }
+  }
+  inp.addEventListener('keydown',function(e){
+    e.stopPropagation();
+    if(e.key==='Enter'){e.preventDefault();finish(true);}
+    else if(e.key==='Escape'){e.preventDefault();finish(false);}
+  });
+  inp.addEventListener('click',function(e){e.stopPropagation();});
+  inp.addEventListener('blur',function(){finish(true);});
 }
 function attachSideLed(){
   var wrap=$('#sideItems'),led=$('#sideLed');
@@ -1554,6 +1591,9 @@ function attachSideLed(){
   };
   /* 点击侧栏项：仅有点击动作才触发水平对齐（悬停只跟随蓝条/灰框，不滚动页面） */
   wrap.onclick=function(e){
+    var rb=e.target&&e.target.closest?e.target.closest('.side-rename'):null;
+    if(rb){e.preventDefault();e.stopPropagation();var rit=rb.closest('.side-item');if(rit)startSideRename(rit,rit.getAttribute('data-cat'));return;}
+    if(e.target&&e.target.closest&&e.target.closest('.side-rename-input'))return;
     var it=e.target&&e.target.closest?e.target.closest('.side-item'):null;
     if(!it||it.parentNode!==wrap)return;
     if(window._sideDragging){e.preventDefault();return;}
