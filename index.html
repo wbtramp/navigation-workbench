@@ -2524,14 +2524,12 @@ document.addEventListener('contextmenu',function(e){
   var sec=t.closest?t.closest('section.cat'):null;
   var cat=sec?sec.id:'';
   var nm=t.querySelector('strong');
-  var name=nm?nm.textContent:(t.textContent||'').trim();
+  var name=nm?nm.textContent.trim():(t.textContent||'').trim();
   openCatCtx(e.clientX,e.clientY,key,cat,name);
 });
-/* 点空白处 / Esc / 滚动时关闭菜单 */
+/* 仅在点击菜单外部或按 Esc 时关闭；滚轮滚动、窗口缩放都不关闭 */
 document.addEventListener('click',function(e){var m=ctxMenuEl();if(m&&!m.contains(e.target))closeCatCtx();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCatCtx();});
-window.addEventListener('scroll',closeCatCtx,true);
-window.addEventListener('resize',closeCatCtx);
 /* 新建分区并移入 */
 var ctxmNewBtn=document.getElementById('ctxmNew');
 if(ctxmNewBtn)ctxmNewBtn.addEventListener('click',function(){
