@@ -39,7 +39,7 @@ body.dark{
 body.dark::before{background:transparent}
 body.dark .side-item{color:#d4d4d8}
 body.dark .side-dot{background:rgba(255,255,255,.22)}
-body.dark .side-led{background:rgba(255,255,255,.16);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+body.dark .side-led{background:var(--led-bg);box-shadow:inset 0 0 0 1px var(--led-ring),inset 0 1px 1px var(--led-hi),var(--led-shadow)}
 body.dark .side-item.led-on,body.dark .side-item.led-on:hover{color:#fff}
 body.dark .side-item.led-on .side-dot,body.dark .side-item.led-on:hover .side-dot{background:#fff}
 body.dark .r-name,body.dark .todo-item,body.dark .btn-ghost,body.dark .lm-upload,body.dark .sec-nav a,body.dark .f-row{color:#d4d4d8}
@@ -102,7 +102,14 @@ input,select{font-family:inherit}
 .side-cap{padding:14px 16px 10px;font-size:11px;letter-spacing:.4px;color:var(--muted-fg);border-bottom:1px solid var(--border-soft);font-weight:600}
 .side-item{display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:var(--side-font-size);color:#3f3f46;transition:.12s;cursor:grab;line-height:1.5;border-left:2px solid transparent;user-select:none}
 #sideItems{position:relative}
-.side-led{position:absolute;top:0;border-radius:7px;background:#18181b;border:none;box-shadow:0 1px 3px rgba(24,24,27,.35);transition:left .16s cubic-bezier(.25,.8,.3,1),top .16s cubic-bezier(.25,.8,.3,1),width .16s cubic-bezier(.25,.8,.3,1),height .16s cubic-bezier(.25,.8,.3,1),opacity .16s;opacity:0;pointer-events:none;z-index:0}
+/* ===== 玻璃胶囊指示器（半透明/模糊/内高光/滑动拉伸回弹） ===== */
+:root{--led-bg:rgba(226,232,242,.72);--led-ring:rgba(255,255,255,.95);--led-hi:rgba(255,255,255,1);--led-shadow:0 3px 12px rgba(24,24,27,.16)}
+body.dark{--led-bg:rgba(255,255,255,.10);--led-ring:rgba(255,255,255,.20);--led-hi:rgba(255,255,255,.28);--led-shadow:0 4px 14px rgba(0,0,0,.4)}
+.side-led{position:absolute;top:0;border-radius:12px;border:none;background:var(--led-bg);
+  -webkit-backdrop-filter:blur(14px) saturate(1.7);backdrop-filter:blur(14px) saturate(1.7);
+  box-shadow:inset 0 0 0 1px var(--led-ring),inset 0 1px 1px var(--led-hi),var(--led-shadow);
+  transition:left .28s ease,top .44s cubic-bezier(.34,1.38,.64,1),width .28s ease,height .28s ease,opacity .2s;
+  opacity:0;pointer-events:none;z-index:0;will-change:left,top,transform}
 .side-item{position:relative;z-index:1}
 .side-item .side-dot{width:4px;height:4px;border-radius:50%;flex-shrink:0;background:#d4d4d8;transition:.12s}
 .side-item:hover{color:var(--fg)}
@@ -271,7 +278,7 @@ footer{text-align:center;padding:6px 0 26px;font-size:12px;color:var(--muted-fg)
 .logo-ico{width:38px;height:38px;border-radius:12px}
 
 /* 3 快捷导航跟随块：黑块改浅灰（贴合文字、保留圆角跟随动效） */
-.side-led{background:#ececef;border-radius:8px;box-shadow:0 2px 6px rgba(24,24,27,.10)}
+.side-led{background:var(--led-bg);border-radius:12px;box-shadow:inset 0 0 0 1px var(--led-ring),inset 0 1px 1px var(--led-hi),var(--led-shadow)}
 .side-item.led-on,.side-item.led-on:hover{color:#18181b}
 .side-item.led-on .side-dot,.side-item.led-on:hover .side-dot{background:#18181b}
 
@@ -1516,14 +1523,32 @@ function attachSideLed(){
   };
   syncLedToActive();
 }
+/* 玻璃胶囊：沿移动方向拉伸 → 压缩过冲 → 弹性归位 */
+function animateLedSquish(led,dy){
+  if(!led||!led.animate)return;
+  var h=led.offsetHeight||30;
+  var power=Math.min(Math.abs(dy)/(h*3),1);          /* 位移越大拉伸越明显，封顶 */
+  if(power<0.12)return;                               /* 微小位移不做动画，避免抖动 */
+  var sx=1-power*0.06, sy=1+power*0.30;               /* 变窄变长 */
+  led.style.transformOrigin=dy>0?'50% 0%':'50% 100%'; /* 尾部固定，朝移动方向拉长 */
+  if(led._squishAnim){try{led._squishAnim.cancel();}catch(e){}}
+  led._squishAnim=led.animate([
+    {transform:'scale(1,1)',offset:0},
+    {transform:'scale('+sx+','+sy+')',offset:0.34},
+    {transform:'scale('+(1+power*0.035)+','+(1-power*0.07)+')',offset:0.70},
+    {transform:'scale(1,1)',offset:1}
+  ],{duration:470,easing:'linear',fill:'none'});
+}
 function moveLedTo(it,align){
   if(!it)return;
   var wrap=it.parentNode,led=$('#sideLed');if(!wrap||!led)return;
   /* 整条跟随：灰块与条目同高，宽度左右各留白 gap 不贴边界，大小恒定，仅随条目上下浮动 */
   var gap=6;
   var top=it.offsetTop,left=it.offsetLeft+gap,w=it.offsetWidth-gap*2,h=it.offsetHeight;
+  var prevTop=led.style.top?parseFloat(led.style.top):null;  /* 记录旧位置，判定移动方向 */
   led.style.left=left+'px';led.style.width=w+'px';
   led.style.top=top+'px';led.style.height=h+'px';led.style.opacity=1;
+  if(prevTop!==null&&Math.abs(top-prevTop)>1)animateLedSquish(led,top-prevTop);
   /* 同步选中态：鼠标跟随项即为选中项，灰色选择框与蓝条不再错位 */
   $$$('.side-item.active').forEach(function(x){if(x!==it)x.classList.remove('active');});
   it.classList.add('active');
