@@ -1004,6 +1004,9 @@ var gh_REPO='wbtramp/navigation-workbench';
 var gh_FILE='nav_data.json';
 var gh_TOKEN_KEY='nav_gh_token_v1';
 var gh_FILE_URL='https://api.github.com/repos/'+gh_REPO+'/contents/'+gh_FILE;
+/* 静态文件地址：GitHub contents API 对 >1MB 文件不返回 content（encoding:none），
+   旧拉取逻辑解析空 content 会误报「HTTP 200 失败」。改用 Pages 静态地址拉取完整数据。*/
+var gh_RAW_URL='https://wbtramp.github.io/navigation-workbench/'+gh_FILE;
 var gh_AUTO_DELAY=1500;
 var gh_fileSha=null;
 var gh_pushTimer=null;
@@ -1019,26 +1022,61 @@ function gh_statusTxt(msg,ok){
   s.textContent=msg;s.className=ok?'gh-status ok':'gh-status';
 }
 function gh_getRemote(cb){
-  var xhr=new XMLHttpRequest();
-  xhr.open('GET',gh_FILE_URL,true);
-  xhr.setRequestHeader('Accept','application/vnd.github.v3+json');
-  xhr.timeout=15000;
-  xhr.onreadystatechange=function(){
-    if(xhr.readyState!==4)return;
-    if(xhr.status===404){cb({ok:false,status:404});return;}
-    if(xhr.status===200){
-      try{
-        var j=JSON.parse(xhr.responseText);
-        var data=JSON.parse(gh_b64Decode(j.content||''));
-        gh_fileSha=j.sha;
-        cb({ok:true,status:200,data:data,sha:j.sha});
-      }catch(e){cb({ok:false,status:200,parseError:true});}
-      return;
-    }
-    cb({ok:false,status:xhr.status});
+  /* 拉取顺序：
+     1) 先用 contents API 取 sha（大文件时 content 为空但 sha 仍正常返回），供推送用；
+     2) 数据本体改从 Pages 静态地址获取，绕开 1MB 限制；
+     3) 静态地址失败时回退到 contents API 的 base64 content（兼容小文件）。*/
+  var meta=new XMLHttpRequest();
+  meta.open('GET',gh_FILE_URL+'?t='+Date.now(),true);
+  meta.setRequestHeader('Accept','application/vnd.github.v3+json');
+  meta.timeout=15000;
+  meta.onreadystatechange=function(){
+    if(meta.readyState!==4)return;
+    if(meta.status===200){try{var m=JSON.parse(meta.responseText);if(m&&m.sha)gh_fileSha=m.sha;}catch(e){}}
+    fetchData();
   };
-  xhr.onerror=function(){cb({ok:false,status:0});};
-  xhr.send();
+  meta.onerror=fetchData;
+  meta.send();
+  function fetchData(){
+    var x=new XMLHttpRequest();
+    x.open('GET',gh_RAW_URL+'?t='+Date.now(),true);
+    x.timeout=20000;
+    x.onreadystatechange=function(){
+      if(x.readyState!==4)return;
+      if(x.status===200){
+        try{
+          var data=JSON.parse(x.responseText);
+          cb({ok:true,status:200,data:data,sha:gh_fileSha});
+        }catch(e){fallbackContent();}
+        return;
+      }
+      fallbackContent();
+    };
+    x.onerror=fallbackContent;
+    x.send();
+  }
+  function fallbackContent(){
+    var y=new XMLHttpRequest();
+    y.open('GET',gh_FILE_URL+'?t='+Date.now(),true);
+    y.setRequestHeader('Accept','application/vnd.github.v3+json');
+    y.timeout=15000;
+    y.onreadystatechange=function(){
+      if(y.readyState!==4)return;
+      if(y.status===404){cb({ok:false,status:404});return;}
+      if(y.status===200){
+        try{
+          var j=JSON.parse(y.responseText);
+          var data=JSON.parse(gh_b64Decode(j.content||''));
+          gh_fileSha=j.sha;
+          cb({ok:true,status:200,data:data,sha:j.sha});
+        }catch(e){cb({ok:false,status:200,parseError:true});}
+        return;
+      }
+      cb({ok:false,status:y.status});
+    };
+    y.onerror=function(){cb({ok:false,status:0});};
+    y.send();
+  }
 }
 function gh_getMetaOnly(cb){
   var xhr=new XMLHttpRequest();
