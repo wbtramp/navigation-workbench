@@ -1022,44 +1022,59 @@ function gh_statusTxt(msg,ok){
   s.textContent=msg;s.className=ok?'gh-status ok':'gh-status';
 }
 function gh_getRemote(cb){
-  /* 用 fetch 从 Pages 静态地址拉取完整 JSON：
-     1) contents API 对 >1MB 文件不返回 content，旧代码解析空内容误报 HTTP 200 失败；
-     2) XHR 拉取 1.2MB 大文件在部分网络环境下会卡住，fetch 更稳。
-     sha 仅在推送时需要，拉取成功后异步补取，不阻塞主流程。*/
-  var done=false;
+  /* 多源拉取，任何一条通即用：
+     A) api.github.com Git Blobs 接口 —— 走 API 域名、支持 >1MB 大文件（主路径）
+     B) raw.githubusercontent.com 静态文件
+     C) GitHub Pages 静态文件
+     先取 sha（小请求），再用 blobs 取完整内容。全程用 XHR，兼容性与推送一致。*/
+  var done=false,tried=[];
   function finish(r){if(done)return;done=true;cb(r);}
-  var timer=setTimeout(function(){finish({ok:false,status:0,timeout:true});},25000);
-  fetch(gh_RAW_URL,{cache:'no-store'})
-    .then(function(resp){if(!resp.ok)throw new Error('HTTP '+resp.status);return resp.json();})
-    .then(function(data){
-      clearTimeout(timer);
-      finish({ok:true,status:200,data:data,sha:gh_fileSha});
-      gh_getMetaOnly(function(sha){if(sha)gh_fileSha=sha;});
-    })
-    .catch(function(err){
-      clearTimeout(timer);
-      /* 回退：fetch 失败时改走 contents API（适用于 <1MB 文件） */
-      var y=new XMLHttpRequest();
-      y.open('GET',gh_FILE_URL+'?t='+Date.now(),true);
-      y.setRequestHeader('Accept','application/vnd.github.v3+json');
-      y.timeout=15000;
-      y.onreadystatechange=function(){
-        if(y.readyState!==4)return;
-        if(y.status===404){finish({ok:false,status:404});return;}
-        if(y.status===200){
-          try{
-            var j=JSON.parse(y.responseText);
-            var data=JSON.parse(gh_b64Decode(j.content||''));
-            gh_fileSha=j.sha;
-            finish({ok:true,status:200,data:data,sha:j.sha});
-          }catch(e){finish({ok:false,status:200,parseError:true});}
-          return;
-        }
-        finish({ok:false,status:y.status});
-      };
-      y.onerror=function(){finish({ok:false,status:0});};
-      y.send();
+  var apiBase='https://api.github.com/repos/'+gh_REPO;
+  var fileUrl=apiBase+'/contents/'+gh_FILE;
+  function xhr(url,headers,timeout,doneFn){
+    var x=new XMLHttpRequest();
+    x.open('GET',url+(url.indexOf('?')>=0?'&':'?')+'_t='+Date.now(),true);
+    for(var k in headers){if(headers.hasOwnProperty(k))x.setRequestHeader(k,headers[k]);}
+    x.timeout=timeout;
+    x.onreadystatechange=function(){if(x.readyState===4)doneFn(x.status,x.responseText);};
+    x.onerror=function(){doneFn(0,'');};
+    x.ontimeout=function(){doneFn(-1,'');};
+    x.send();
+  }
+  function tryStatic(list,sha){
+    var i=0;
+    (function next(){
+      if(i>=list.length){finish({ok:false,status:0,detail:tried.join(',')||'all-failed'});return;}
+      var u=list[i++];
+      xhr(u,{},25000,function(st,txt){
+        if(st===200){try{var d=JSON.parse(txt);finish({ok:true,status:200,data:d,sha:sha,source:u});}catch(e){tried.push('parse');next();}return;}
+        tried.push((st<0?'timeout':st));next();
+      });
+    })();
+  }
+  /* 步骤1：取 sha（938 字节，很快；失败也不影响兜底静态路径） */
+  xhr(fileUrl,{'Accept':'application/vnd.github.v3+json'},15000,function(st,txt){
+    var sha=null;
+    if(st===200){try{var m=JSON.parse(txt);sha=m.sha;gh_fileSha=sha;}catch(e){}}
+    var statics=[
+      'https://raw.githubusercontent.com/'+gh_REPO+'/main/'+gh_FILE,
+      'https://wbtramp.github.io/navigation-workbench/'+gh_FILE
+    ];
+    if(!sha){tried.push('no-sha');tryStatic(statics,null);return;}
+    /* 步骤2：Git Blobs 接口取完整内容（api.github.com，不受 1MB 限制） */
+    xhr(apiBase+'/git/blobs/'+sha,{'Accept':'application/vnd.github.v3+json'},30000,function(s2,txt2){
+      if(s2===200){
+        try{
+          var j=JSON.parse(txt2);
+          var data=JSON.parse(gh_b64Decode(j.content||''));
+          finish({ok:true,status:200,data:data,sha:sha,source:'blobs'});
+        }catch(e){tried.push('blobs-parse');tryStatic(statics,sha);}
+        return;
+      }
+      tried.push('blobs-'+(s2<0?'timeout':s2));
+      tryStatic(statics,sha);
     });
+  });
 }
 function gh_getMetaOnly(cb){
   var xhr=new XMLHttpRequest();
@@ -1181,7 +1196,7 @@ function gh_pull(){
         }
         return;
       }
-      gh_statusTxt('拉取云端失败（HTTP '+(r.status||'网络错误')+'），使用本地数据',null);
+      gh_statusTxt('拉取云端失败（'+(r.detail?('网络:'+r.detail):('HTTP '+(r.status||'网络错误')))+'），使用本地数据',null);
       return;
     }
     var remote=r.data;
