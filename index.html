@@ -1021,7 +1021,19 @@ function gh_statusTxt(msg,ok){
   if(msg===undefined)msg=gh_hasToken()?'已配置 Token，编辑数据后约 1.5 秒自动推送':'未配置 Token，暂未启用云端同步';
   s.textContent=msg;s.className=ok?'gh-status ok':'gh-status';
 }
+var gh_pulling=false, gh_pullWaiters=[];
 function gh_getRemote(cb){
+  /* 防并发：自动拉取与手动点击可能同时触发，多个 1.2MB 请求并发会导致超时。
+     同一时刻只允许一个拉取在跑，其余排队等结果，共享同一份数据。*/
+  if(gh_pulling){gh_pullWaiters.push(cb);return;}
+  gh_pulling=true;
+  var origCb=cb;
+  cb=function(r){
+    origCb(r);
+    var w=gh_pullWaiters.slice();gh_pullWaiters=[];
+    gh_pulling=false;
+    for(var i=0;i<w.length;i++){try{w[i](r);}catch(e){}}
+  };
   /* 多源拉取，任何一条通即用：
      A) api.github.com Git Blobs 接口 —— 走 API 域名、支持 >1MB 大文件（主路径）
      B) raw.githubusercontent.com 静态文件
